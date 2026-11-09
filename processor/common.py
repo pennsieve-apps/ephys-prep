@@ -185,6 +185,12 @@ def setup_writable_dirs() -> str:
     HOME and TMPDIR, and nothing baked into the image's /tmp or HOME exists at run time). Returns the scratch dir."""
     import tempfile
 
+    for var in ("HOME", "TMPDIR"):              # the runtime sets them; they may not exist yet
+        if os.environ.get(var):
+            try:
+                os.makedirs(os.environ[var], exist_ok=True)
+            except OSError:
+                pass
     tmp = os.environ.get("TMPDIR") or tempfile.gettempdir()
     for var, sub in (("MPLCONFIGDIR", "mpl"), ("NUMBA_CACHE_DIR", "numba"), ("XDG_CACHE_HOME", "cache"), ("TRITON_CACHE_DIR", "triton")):
         if not os.environ.get(var):

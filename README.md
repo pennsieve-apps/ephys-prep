@@ -129,10 +129,19 @@ more than one probe, `_probe00`, `_probe01`, ... is appended (from the stream na
 ## Results on the demo data
 
 **IBL, `sub-NR-0031_ses-caa5dddc`, Probe01** (NP 1.0, 384 channels, 10 min, 899.67-1499.67 s on the session
-clock; DANDI:000409). RESULTS_IBL
+clock; DANDI:000409). Phase shift applied (NP 1.0 part
+number `PRB_1_4_0480_1_C` from the NWB device), 1 bad channel (`AP191`, dead), 383 channels written (13 GB int16).
+Timestamps: effective rate 30,000.48 Hz vs 30,000 Hz nominal (+0.0016 %, below the 0.1 % reporting threshold; no
+broken stretches in this cut). DREDge found 255,873 spikes (426 per s) and very little drift: median range 2.6 µm,
+largest 8.9 µm, below the 10 µm threshold, so the CPU sorters will not interpolate and Kilosort4 corrects on its
+own. Brain areas from IBL's histology (17, from V1 through hippocampus to thalamus and midbrain) are kept on the
+channels. Output: the workflow repo's `data/work/ibl/ephys-prep/`.
 
 **Ground truth** (DANDI:001250 `sub-demo-npx-bio-evoked`: simulated NP 1.0 shank, 120 channels, 20 kHz,
-float32 µV, 60 s; `BAD_CHANNELS=dead-noisy`): RESULTS_GT
+float32 µV, 60 s; `BAD_CHANNELS=dead-noisy`): the simulation's float32 µV were written as int16 at 0.17 µV/bit (1/20 of
+the median noise); no bad channels; drift 0.2 µm (none was simulated). With `BAD_CHANNELS=auto` the "outside the
+brain" rule flags 38 quiet channels at the top of this simulated shank (see Limitations). Output:
+`data/work/ground-truth/ephys-prep/`.
 
 **Synthetic fixture** (`tests/make_fixture.py`, 64 channels, 12 planted units, a dead and a noisy channel, 15 µm
 of drift, a 60 Hz + 3 Hz common signal): both planted bad channels are found, the common signal is removed
@@ -141,7 +150,18 @@ of drift, a 60 Hz + 3 Hz common signal): both planted bad channels are found, th
 
 ## Runtime
 
-RUNTIME
+Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 min probe took **18 min**
+(bad channels 0.5 min, DREDge 12 min, writing 5.5 min); peak memory 4.6 GB in the main process plus ~0.5-1.2 GB per
+worker; 120 s took 2 min. The ground-truth file (120 channels, 60 s) took 1.6 min. **Docker, linux/amd64 under
+emulation** (QEMU, 5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
+container (2 CPUs, 4 GB) took 10 min with 1.7 GB peak; DOCKER_IBL.
+
+Memory scales with the number of workers: each spawned worker holds the stack (~350 MB) and a few 1 s chunks of
+384 channels; peak detection and localisation reach ~1.2 GB per worker. The app caps the workers at
+(container memory − 1.5 GB) / 1.2 GB. Chosen: **8 vCPU, 16 GB** (8 workers fit), timeout 6 h: about 20-30 min per
+10 min of a Neuropixels probe on x86 (est.), i.e. ~2-3 h per probe-hour. Disk: the output is the size of the int16
+recording (~83 GB per probe-hour). This is too big for a Lambda step (> 10 GB, > 15 min) except for short windows
+of small probes.
 
 ## Limitations
 
