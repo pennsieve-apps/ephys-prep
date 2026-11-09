@@ -161,3 +161,34 @@ class Heartbeat:
         self._stop.set()
         self._thread.join(timeout=5)
         return False
+
+
+def worker_count(threads: int, per_worker_mb: float = 1200.0, reserve_mb: float = 1536.0) -> int:
+    """Parallel workers: THREADS, but no more than the container's memory allows.
+
+    Each spawned SpikeInterface worker imports the stack (SpikeInterface, PyTorch: ~350 MB) and holds a few 1 s
+    chunks of the recording (384 channels: ~50 MB each, float32, several copies in a filter chain), measured at
+    up to ~1.2 GB in peak detection + localisation (measured under a 4 GB limit: 3 workers + main went out of
+    memory on a 384-channel probe); the main process keeps ~1-1.5 GB (peaks, timestamps, motion).
+    """
+    limit = cgroup_memory_limit_mb()
+    if not limit:
+        return threads
+    fit = max(1, int((limit - reserve_mb) // per_worker_mb))
+    if fit < threads:
+        log.info("THREADS=%d but the container has %.0f MB: using %d worker processes (about %.0f MB each)", threads, limit, fit, per_worker_mb)
+    return min(threads, fit)
+
+
+def setup_writable_dirs() -> str:
+    """Point every library cache at $TMPDIR (Lambda-safe: the file system is read-only except INPUT_DIR, OUTPUT_DIR,
+    HOME and TMPDIR, and nothing baked into the image's /tmp or HOME exists at run time). Returns the scratch dir."""
+    import tempfile
+
+    tmp = os.environ.get("TMPDIR") or tempfile.gettempdir()
+    for var, sub in (("MPLCONFIGDIR", "mpl"), ("NUMBA_CACHE_DIR", "numba"), ("XDG_CACHE_HOME", "cache"), ("TRITON_CACHE_DIR", "triton")):
+        if not os.environ.get(var):
+            os.environ[var] = os.path.join(tmp, sub)
+        os.makedirs(os.environ[var], exist_ok=True)
+    os.environ.setdefault("USER", "app")           # getpass (torch) with an arbitrary uid and no passwd entry
+    return tmp

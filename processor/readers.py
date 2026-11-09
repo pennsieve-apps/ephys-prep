@@ -25,6 +25,7 @@ class Stream:
     time_source: str = "t_start + n / rate"
     nwb: dict | None = None        # source NWB identity (session_start_time, identifier, ...)
     timestamps: object = None      # callable -> float64 array of explicit sample times (NWB `timestamps`), else None
+    lfp: object = None             # callable -> (LFP recording of the same probe, its timestamps or None), else None
 
 
 def list_streams(src: Source) -> list[Stream]:
@@ -63,8 +64,10 @@ def _spikeglx_streams(src: Source) -> list[Stream]:
         if not sid.endswith(".ap"):
             continue
         meta_file = next((f for f in src.files if f".{sid}." in f.name or f.name.endswith(f"{sid}.bin")), None)
+        lf = sid[:-3] + ".lf"
         out.append(Stream(sid, (lambda s=sid: se.read_spikeglx(src.path, stream_id=s)),
-                          _spikeglx_probe_meta(meta_file) if meta_file else {}, "SpikeGLX meta (t0 + n / rate)"))
+                          _spikeglx_probe_meta(meta_file) if meta_file else {}, "SpikeGLX meta (t0 + n / rate)",
+                          lfp=(lambda s=lf: (se.read_spikeglx(src.path, stream_id=s), None, s)) if lf in ids else None))
     return out
 
 
@@ -109,8 +112,10 @@ def _openephys_streams(src: Source) -> list[Stream]:
             continue
         for b in range(n_blocks):
             label = name if n_blocks == 1 else f"{name}#block{b}"
+            lf = next((x for x in names if x != name and x.replace("-LFP", "").replace("-LF", "") == name.replace("-AP", "")), None)
             out.append(Stream(label, (lambda n=name, b=b: se.read_openephys(src.path, stream_name=n, block_index=b)),
-                              {"geometry_source": "Open Ephys settings.xml"}, "Open Ephys sample numbers / rate"))
+                              {"geometry_source": "Open Ephys settings.xml"}, "Open Ephys sample numbers / rate",
+                              lfp=(lambda n=lf, b=b: (se.read_openephys(src.path, stream_name=n, block_index=b), None, n)) if lf else None))
     return out
 
 
@@ -159,8 +164,8 @@ def nwb_identity(path: Path) -> dict:
     return out
 
 
-def nwb_electrical_series(path: Path) -> list[dict]:
-    """ElectricalSeries in acquisition/ (spike band only: rate >= 10 kHz), with their time base and device."""
+def nwb_electrical_series(path: Path, lfp: bool = False) -> list[dict]:
+    """ElectricalSeries in acquisition/ (spike band: rate >= 10 kHz; or with lfp=True the LFP ones), with time base and device."""
     import h5py
 
     found = []
@@ -190,7 +195,14 @@ def nwb_electrical_series(path: Path) -> list[dict]:
         f["acquisition"].visititems(visit)
         for s in found:
             s["device"] = _nwb_device_for(f, s["path"])
-    return [s for s in found if s["rate"] >= LFP_MAX_RATE and not re.search(r"(^|[^A-Za-z])LF(P)?($|[^A-Za-z])", s["name"])]
+    is_lfp = [s["rate"] < LFP_MAX_RATE or bool(re.search(r"(^|[^A-Za-z])LF(P)?($|[^A-Za-z])|LF$|LFP", s["name"])) for s in found]
+    return [s for s, l in zip(found, is_lfp) if l == lfp]
+
+
+def _probe_token(name: str) -> str:
+    """The part of a stream name that identifies the probe (Probe01, imec0, ProbeA), lower case; '' when none."""
+    m = re.search(r"(probe[_ -]?\w?\d*|imec\d+)", name, re.I)
+    return m.group(1).lower() if m else ""
 
 
 def _nwb_device_for(f, series_path: str) -> dict:
@@ -233,6 +245,7 @@ def _nwb_streams(src: Source) -> list[Stream]:
         log.info("%s: no spike-band ElectricalSeries in acquisition/ (LFP-only or processed file), skipped", src.path.name)
         return []
     ident = nwb_identity(src.path)
+    lfp_series = nwb_electrical_series(src.path, lfp=True)
     out = []
     for s in series:
         def _open(p=s["path"]):
@@ -247,8 +260,10 @@ def _nwb_streams(src: Source) -> list[Stream]:
                  "description": dev.get("description")}
         if probe["part_number"]:
             probe["model"] = _np_model_name(probe["part_number"])
+        lfp_match = [l for l in lfp_series if _probe_token(l["name"]) == _probe_token(s["name"])] if len(lfp_series) > 1 else lfp_series
         out.append(Stream(s["name"], _open, {k: v for k, v in probe.items() if v}, "NWB timestamps" if s["timestamps"] else "NWB starting_time + n / rate", ident,
-                          (lambda p=s["path"]: read_nwb_timestamps(src.path, p)) if s["timestamps"] else None))
+                          (lambda p=s["path"]: read_nwb_timestamps(src.path, p)) if s["timestamps"] else None,
+                          (lambda l=lfp_match[0]: _open_nwb_lfp(src.path, l)) if len(lfp_match) == 1 else None))
     return out
 
 
@@ -356,3 +371,10 @@ def read_nwb_timestamps(path: Path, series_path: str) -> np.ndarray:
     if (unit.decode() if isinstance(unit, bytes) else unit) != "seconds" or interval != 1:
         log.warning("%s: timestamps unit %r interval %s (expected seconds, 1)", series_path, unit, interval)
     return out
+
+
+def _open_nwb_lfp(path: Path, series: dict):
+    import spikeinterface.extractors as se
+
+    rec = se.read_nwb_recording(path, electrical_series_path=series["path"], load_time_vector=False)
+    return rec, (read_nwb_timestamps(path, series["path"]) if series["timestamps"] else None), series["name"]

@@ -56,7 +56,7 @@ references:
   doi: 10.7554/elife.61834
   identifiers:
   - type: other
-    value: pmid:33170122
+    value: '33170122'
     description: PubMed ID
 - type: article
   title: Efficient and reproducible pipelines for spike sorting large-scale electrophysiology data
@@ -83,7 +83,7 @@ references:
   doi: 10.7554/elife.110170
   identifiers:
   - type: other
-    value: pmid:42554034
+    value: '42554034'
     description: PubMed ID
 - type: generic
   title: Spike sorting pipeline for the International Brain Laboratory
@@ -110,7 +110,7 @@ references:
   doi: 10.1109/iembs.2009.5333230
   identifiers:
   - type: other
-    value: pmid:19964004
+    value: '19964004'
     description: PubMed ID
 - type: article
   title: A Modular Implementation to Handle and Benchmark Drift Correction for High-Density Extracellular Recordings
@@ -137,7 +137,7 @@ references:
   doi: 10.1523/eneuro.0229-23.2023
   identifiers:
   - type: other
-    value: pmid:38238082
+    value: '38238082'
     description: PubMed ID
 - type: article
   title: 'DREDge: robust motion correction for high-density extracellular recordings across species'
@@ -251,7 +251,7 @@ references:
   doi: 10.1038/s41592-025-02614-5
   identifiers:
   - type: other
-    value: pmid:40050699
+    value: '40050699'
     description: PubMed ID
 - type: article
   title: 'Neo: an object model for handling electrophysiology data in multiple formats'
@@ -284,7 +284,7 @@ references:
   doi: 10.3389/fninf.2014.00010
   identifiers:
   - type: other
-    value: pmid:24600386
+    value: '24600386'
     description: PubMed ID
 - type: article
   title: The Neurodata Without Borders ecosystem for neurophysiological data science
@@ -324,7 +324,7 @@ references:
   doi: 10.7554/elife.78362
   identifiers:
   - type: other
-    value: pmid:36193886
+    value: '36193886'
     description: PubMed ID
 - type: article
   title: Fully integrated silicon probes for high-density recording of neural activity
@@ -408,7 +408,7 @@ references:
   doi: 10.1038/nature24636
   identifiers:
   - type: other
-    value: pmid:29120427
+    value: '29120427'
     description: PubMed ID
 - type: article
   title: 'Neuropixels 2.0: A miniaturized high-density probe for stable, long-term brain recordings'
@@ -530,7 +530,7 @@ references:
   doi: 10.1126/science.abf4588
   identifiers:
   - type: other
-    value: pmid:33859006
+    value: '33859006'
     description: PubMed ID
 - type: data
   title: IBL - Brain Wide Map
@@ -664,7 +664,7 @@ references:
   doi: 10.1038/s41586-025-09235-0
   identifiers:
   - type: other
-    value: pmid:40903598
+    value: '40903598'
     description: PubMed ID
   notes: Authored by the International Brain Laboratory consortium. Author list as in PubMed (PMID 40903598); Crossref's record
     repeats part of the list, which CITATION.cff cannot hold (authors must be unique).

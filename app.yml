@@ -102,15 +102,32 @@ parameters:
   - name: MOTION_CORRECTION
     type: string
     description: >-
-      estimate (default): estimate drift with DREDge for QC and for the record, but do not change
-      the data: Kilosort4 and Lupin correct drift themselves, and interpolating twice costs
-      accuracy (AIND default). apply: also interpolate the traces (for sorters without their own
-      drift correction; spike-sort then switches the sorter's correction off). none: skip.
+      estimate (default): always estimate drift with DREDge (QC figures, session.json, and the
+      estimate spike-sort's CPU sorters interpolate with when the drift exceeds
+      MOTION_THRESHOLD_UM); the data are not changed here, and Kilosort4 corrects drift itself.
+      apply: interpolate the traces here when the drift exceeds MOTION_THRESHOLD_UM (for other
+      sorters; spike-sort then corrects nothing). none: skip.
     defaultValue: estimate
     validValues: [estimate, apply, none]
+  - name: MOTION_THRESHOLD_UM
+    type: number
+    description: >-
+      Drift (largest range of the estimated displacement over the session, um) above which the
+      recording is worth interpolating (Garcia et al. 2026: below ~10 um interpolation costs more
+      than it gains). Recorded in session.json (motion_above_threshold); 0 = always.
+    defaultValue: 10
+    min: 0
+  - name: MOTION_SOURCE
+    type: string
+    description: >-
+      ap (default): DREDge on detected spikes. lfp: DREDge on the LFP (the probe's LF stream, or a
+      wide-band recording), better for sparse units or fast motion (human intraoperative and NHP
+      recordings); falls back to ap when there is no LFP (Neuropixels 1.0 AP data are high-passed).
+    defaultValue: ap
+    validValues: [ap, lfp]
   - name: MOTION_PRESET
     type: string
-    description: "dredge_fast (AIND default) or dredge (slower, more precise localisation)."
+    description: "Spike-based DREDge preset: dredge_fast (AIND default) or dredge (slower, more precise localisation)."
     defaultValue: dredge_fast
     validValues: [dredge_fast, dredge]
   - name: BAD_TIMESTAMPS
@@ -143,11 +160,13 @@ inputs:
       Optional sessions.csv (session_id, path, subject_id, condition, group, ...).
     mediaTypes:
       - "application/x-hdf5; profile=nwb"
+      - application/vnd.pennsieve.spikeglx
+      - application/vnd.pennsieve.open-ephys-binary
+      - application/vnd.pennsieve.intan
       - application/octet-stream
       - application/json
       - text/csv
-    formats:
-      - format_3915
+    container: directory
     required: true
 outputs:
   - name: recording

@@ -173,11 +173,10 @@ def prepare(rec, p: dict, sample_shifts: np.ndarray | None, job_kwargs: dict, ti
         x = spre.highpass_spatial_filter(x, dtype="float32", **AIND_DESTRIPE)
         steps.append({"step": "highpass_spatial_filter (IBL destriping)", **AIND_DESTRIPE})
 
-    if times is not None:
-        # Not every preprocessor passes an explicit time vector on (phase_shift doesn't in SpikeInterface 0.105.4):
-        # re-attach the session-clock timestamps so motion bins, figures and the saved folder use them.
-        for r in (rec_uV, filtered, x):
-            r.set_times(times, segment_index=0, with_warning=False)
+    # The session-clock timestamps (when the source has explicit ones) stay in `times`, not on the recordings:
+    # SpikeInterface sends every recording to its worker processes, and a time vector (8 bytes per sample, and not
+    # passed on by every preprocessor) would travel with each one. They are applied to motion bins, figures and the
+    # saved folder (times_cached_seg0.raw) by the caller.
     return Prepared(raw_uV=rec_uV, filtered=filtered, preprocessed=x, for_motion=x, t_start=t_start, t_stop=t_stop, steps=steps,
                     bad_channels=bad, channel_labels=labels, noise_uV=noise_uV, phase_shift=did_shift, source_gain_uV=source_gain,
                     times=times)
@@ -272,3 +271,85 @@ def check_timestamps(times: np.ndarray, fs: float, tol: float = 0.001, block_s: 
                 bad_blocks.append([i0, i1])
     keep = (int(edges[best[0]]), int(edges[best[1]]) + (1 if best[1] == len(good) else 0))
     return {"ok": False, "median_rate": med, "bad_blocks": bad_blocks, "keep": keep}
+
+
+def session_time(prep_times, rec):
+    """sample index (of `rec`) -> seconds on the session clock: the explicit timestamps, else t_start + i / rate."""
+    if prep_times is not None:
+        return lambda idx: np.asarray(prep_times)[np.clip(np.asarray(idx, dtype=np.int64), 0, len(prep_times) - 1)]
+    return lambda idx: rec.sample_index_to_time(np.asarray(idx))
+
+
+def motion_to_session_clock(motion, rec, prep_times):
+    """A copy of `motion` whose temporal bins are on the session clock (they come out of DREDge in the recording's
+    nominal clock, t_start + i / rate, which drifts from explicit timestamps)."""
+    if prep_times is None:
+        return motion
+    from spikeinterface.core import Motion
+
+    fs, t0 = rec.get_sampling_frequency(), rec.get_start_time()
+    bins = []
+    for tb in motion.temporal_bins_s:
+        idx = (np.asarray(tb) - t0) * fs
+        bins.append(np.interp(idx, np.arange(len(prep_times)), prep_times))
+    return Motion(displacement=motion.displacement, temporal_bins_s=bins, spatial_bins_um=motion.spatial_bins_um,
+                  direction=motion.direction, interpolation_method=motion.interpolation_method)
+
+
+def attach_times_file(folder, times) -> None:
+    """Give a saved binary_folder its explicit session-clock timestamps: times_cached_seg0.raw (float64, one per
+    sample) referenced from binary.json, exactly as SpikeInterface writes it for a recording with a time vector."""
+    import json
+    from pathlib import Path
+
+    folder = Path(folder)
+    np.ascontiguousarray(times, dtype="<f8").tofile(folder / "times_cached_seg0.raw")
+    for name in ("binary.json", "si_folder.json"):
+        f = folder / name
+        if not f.exists():
+            continue
+        d = json.loads(f.read_text())
+        kw = d.get("kwargs", {})
+        if "file_paths" in kw:                      # binary.json (BinaryRecordingExtractor)
+            kw["file_timestamps_paths"] = ["times_cached_seg0.raw"]
+            kw["t_starts"] = None
+            f.write_text(json.dumps(d, indent=4))
+
+
+def estimate_motion_lfp(lfp, bad_ids, job_kwargs: dict):
+    """DREDge on the LFP (Windolf et al. 2025; SpikeInterface's dredge_lfp recipe): band-pass 0.5-250 Hz, common
+    median reference, resample to 250 Hz, second spatial derivative (a current-source-density-like signal),
+    average the columns, then rigid registration of 1 s bins. Better than spikes when units are sparse or the
+    motion is fast (human intraoperative / NHP recordings). Returns (motion, params)."""
+    import spikeinterface.preprocessing as spre
+    from spikeinterface.sortingcomponents.motion import estimate_motion
+
+    x = lfp
+    drop = [c for c in x.channel_ids if str(c) in set(bad_ids)]
+    if drop:
+        x = x.remove_channels(drop)
+    # DREDge LFP reads the whole (short, 250 Hz) signal at once, so long filter margins avoid chunk-edge artefacts
+    x = spre.bandpass_filter(x, freq_min=0.5, freq_max=250.0, margin_ms=3000.0, ignore_low_freq_error=True, dtype="float32")
+    x = spre.common_reference(x, reference="global", operator="median")
+    x = spre.resample(x, resample_rate=250, margin_ms=1000)
+    x = spre.directional_derivative(x, order=2, edge_order=1)
+    x = spre.average_across_direction(x)
+    motion = estimate_motion(x, method="dredge_lfp", rigid=True, progress_bar=False)
+    return motion, {"method": "dredge_lfp", "rigid": True, "bandpass_hz": [0.5, 250.0], "resample_hz": 250}
+
+
+def lfp_from_ap(rec):
+    """An LFP signal from a wide-band recording (low-pass + decimate is done by the LFP recipe's band-pass and resample)."""
+    return rec
+
+
+def motion_to_rec_clock(motion_session, rec, prep_times):
+    """Inverse of motion_to_session_clock: temporal bins from the session clock to `rec`'s nominal clock."""
+    if prep_times is None:
+        return motion_session
+    from spikeinterface.core import Motion
+
+    fs, t0 = rec.get_sampling_frequency(), rec.get_start_time()
+    bins = [t0 + np.interp(np.asarray(tb), prep_times, np.arange(len(prep_times))) / fs for tb in motion_session.temporal_bins_s]
+    return Motion(displacement=motion_session.displacement, temporal_bins_s=bins, spatial_bins_um=motion_session.spatial_bins_um,
+                  direction=motion_session.direction, interpolation_method=motion_session.interpolation_method)

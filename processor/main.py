@@ -48,6 +48,8 @@ DEFAULTS = {
     "REFERENCE": "cmr",
     "MOTION_CORRECTION": "estimate",
     "MOTION_PRESET": "dredge_fast",
+    "MOTION_SOURCE": "ap",
+    "MOTION_THRESHOLD_UM": "10",
     "BAD_TIMESTAMPS": "drop",
     "THREADS": "0",
     "SEED": "42",
@@ -60,6 +62,7 @@ CHOICES = {
     "REFERENCE": ("cmr", "destripe", "none"),
     "MOTION_CORRECTION": ("estimate", "apply", "none"),
     "MOTION_PRESET": ("dredge_fast", "dredge"),
+    "MOTION_SOURCE": ("ap", "lfp"),
     "BAD_TIMESTAMPS": ("drop", "keep"),
 }
 CITATIONS = {
@@ -92,12 +95,13 @@ def read_parameters(env=os.environ) -> dict:
         p["FREQ_MIN"] = float(raw["FREQ_MIN"])
         p["FREQ_MAX"] = float(raw["FREQ_MAX"])
         p["MAX_BAD_CHANNEL_FRACTION"] = float(raw["MAX_BAD_CHANNEL_FRACTION"])
+        p["MOTION_THRESHOLD_UM"] = float(raw["MOTION_THRESHOLD_UM"])
         p["THREADS"] = int(raw["THREADS"])
         p["SEED"] = int(raw["SEED"])
     except ValueError as exc:
         raise ParameterError(f"bad numeric parameter: {exc}") from exc
-    if p["DURATION"] < 0 or p["THREADS"] < 0:
-        raise ParameterError("DURATION and THREADS must be >= 0")
+    if p["DURATION"] < 0 or p["THREADS"] < 0 or p["MOTION_THRESHOLD_UM"] < 0:
+        raise ParameterError("DURATION, THREADS and MOTION_THRESHOLD_UM must be >= 0")
     if not 0 < p["FREQ_MIN"] < p["FREQ_MAX"]:
         raise ParameterError("need 0 < FREQ_MIN < FREQ_MAX")
     if not 0 < p["MAX_BAD_CHANNEL_FRACTION"] <= 1:
@@ -258,37 +262,74 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
         shifts = R.neuropixels_sample_shifts(probe_info.get("part_number") or probe_info.get("model"), n_src)
     prep = P.prepare(rec, p, shifts, job_kwargs, times=tv)
     del tv
-    log.info("session %s: window [%.3f, %.3f) s, %d bad channels (%s), phase shift %s, %s reference", sid, prep.t_start, prep.t_stop,
+    log.info("session %s: window [%.3f, %.3f) s, %d bad channels (%s), phase shift %s, %s reference [peak RSS %s MB]", sid, prep.t_start, prep.t_stop,
              len(prep.bad_channels), ", ".join(b["id"] for b in prep.bad_channels[:12]) + (" ..." if len(prep.bad_channels) > 12 else ""),
-             "yes" if prep.phase_shift else "no", p["REFERENCE"])
+             "yes" if prep.phase_shift else "no", p["REFERENCE"], C.peak_rss_mb())
 
     figures = []
     cap = F.bad_channels(sdir / f"{sid}_bad_channels.png", sid, prep.filtered, prep.channel_labels, prep.noise_uV)
     bad_fig = {"path": f"{sid}/{sid}_bad_channels.png", "caption": cap}
 
     final = prep.preprocessed
-    motion = motion_info = None
+    motion = motion_info = motion_session = None
     motion_method = "none"
     motion_stats: dict = {}
+    motion_decision = "motion not estimated (MOTION_CORRECTION=none)"
+    above = None
+    applied = False
     n_peaks = None
     if p["MOTION_CORRECTION"] != "none":
         ok, why = P.motion_feasible(prep.for_motion)
         if not ok:
             log.info("session %s: motion not estimated: %s", sid, why)
             motion_method = f"none ({why})"
+            motion_decision = f"motion not estimated: {why}"
         else:
             t_m = time.monotonic()
-            with C.Heartbeat(f"{sid}: motion estimation (detect, localise, DREDge)"):
-                motion, motion_info, mparams = P.estimate_motion(prep.for_motion, p, job_kwargs)
-            n_peaks = int(len(motion_info["peaks"]))
-            motion.save(sdir / "motion")
-            cap, motion_stats = F.motion_traces(sdir / f"{sid}_motion.png", sid, motion)
+            source = p["MOTION_SOURCE"]
+            if source == "lfp":
+                lfp = st.lfp() if st.lfp is not None else None
+                if lfp is None and "Neuropixels 1.0" in str(probe_info.get("model", "")):
+                    msg = f"{sid}: MOTION_SOURCE=lfp but this recording has no LFP stream (Neuropixels 1.0 AP data are high-passed in hardware); using spikes (dredge_ap)"
+                    log.warning(msg)
+                    warnings.append(msg)
+                    source = "ap"
+            if source == "lfp":
+                with C.Heartbeat(f"{sid}: LFP motion estimation (DREDge LFP)"):
+                    if lfp is not None:
+                        lrec, ltimes, lname = lfp
+                        lwin, _, _, lwt = P.apply_window(lrec, prep.t_start, prep.t_stop - prep.t_start, ltimes)
+                        lwin = __import__("spikeinterface.preprocessing", fromlist=["x"]).scale_to_uV(lwin) if lwin.has_scaleable_traces() else lwin
+                    else:                       # a wide-band recording: the LFP recipe low-passes and resamples it
+                        lname, lwin, lwt = f"{st.label} (wide band)", prep.raw_uV, prep.times
+                    lm, mparams = P.estimate_motion_lfp(lwin, [b["id"] for b in prep.bad_channels], job_kwargs)
+                    motion_session = P.motion_to_session_clock(lm, lwin, lwt)
+                    motion = P.motion_to_rec_clock(motion_session, prep.for_motion, prep.times)
+                    mparams["lfp_stream"] = lname
+                motion_label = "DREDge LFP"
+            else:
+                with C.Heartbeat(f"{sid}: motion estimation (detect, localise, DREDge)"):
+                    motion, motion_info, mparams = P.estimate_motion(prep.for_motion, p, job_kwargs)
+                n_peaks = int(len(motion_info["peaks"]))
+                motion_session = P.motion_to_session_clock(motion, prep.for_motion, prep.times)
+                motion_label = f"DREDge ({p['MOTION_PRESET']})"
+            motion_session.save(sdir / "motion")
+            cap, motion_stats = F.motion_traces(sdir / f"{sid}_motion.png", sid, motion_session)
             motion_fig = {"path": f"{sid}/{sid}_motion.png", "caption": cap}
-            motion_method = f"DREDge ({p['MOTION_PRESET']}), " + ("estimated and applied (kriging interpolation)" if p["MOTION_CORRECTION"] == "apply"
-                                                                   else "estimated only (the sorter corrects drift)")
-            log.info("session %s: motion estimated in %.0f s from %d peaks; drift range median %.1f um, max %.1f um", sid,
-                     time.monotonic() - t_m, n_peaks, motion_stats["median_drift_range_um"], motion_stats["max_drift_range_um"])
+            above = motion_stats["max_drift_range_um"] > p["MOTION_THRESHOLD_UM"]
+            applied = p["MOTION_CORRECTION"] == "apply" and above
+            size = f"{motion_stats['max_drift_range_um']:.1f} um {'>' if above else '<='} MOTION_THRESHOLD_UM={p['MOTION_THRESHOLD_UM']:g}"
             if p["MOTION_CORRECTION"] == "apply":
+                motion_decision = (f"interpolated here ({size})" if applied else f"not interpolated: drift too small to be worth interpolating ({size})")
+            else:
+                motion_decision = ("estimated only; " + (f"drift is above the threshold ({size}): spike-sort's CPU sorters interpolate with "
+                                                         "this motion, Kilosort4 corrects drift itself" if above else
+                                                         f"drift is small ({size}): spike-sort's CPU sorters do not correct it; Kilosort4 still runs its own correction"))
+            motion_method = f"{motion_label}, " + ("estimated and applied (kriging interpolation)" if applied else "estimated only")
+            log.info("session %s: motion (%s) estimated in %.0f s%s; drift range median %.1f um, max %.1f um; %s [peak RSS %s MB]", sid, motion_label, time.monotonic() - t_m,
+                     f" from {n_peaks} peaks" if n_peaks else "", motion_stats["median_drift_range_um"], motion_stats["max_drift_range_um"], motion_decision,
+                     C.peak_rss_mb())
+            if applied:
                 from spikeinterface.sortingcomponents.motion import interpolate_motion
 
                 final = interpolate_motion(prep.for_motion, motion, border_mode="force_extrapolate", spatial_interpolation_method="kriging",
@@ -297,31 +338,28 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
 
     gain = P.choose_int16_gain(prep, final)
     out = P.to_int16(final, gain)
-    if prep.times is not None:            # explicit timestamps (NWB): saved with the recording (times_cached_seg0.raw)
-        out.set_times(prep.times, segment_index=0, with_warning=False)
     t_s = time.monotonic()
     with C.Heartbeat(f"{sid}: writing the preprocessed recording"):
         out.save(folder=sdir / "recording", format="binary", overwrite=True, **job_kwargs)
     if prep.times is not None:
-        # SpikeInterface 0.105.4's workers write the timestamps from a re-created recording that has lost
-        # set_times(); write them here from the parent (float64, one per sample, as BinaryRecordingExtractor reads them).
-        tfile = sdir / "recording" / "times_cached_seg0.raw"
-        np.ascontiguousarray(prep.times, dtype="<f8").tofile(tfile)
-    log.info("session %s: wrote %d channels x %d samples (int16, %.4g uV/bit) in %.0f s", sid, out.get_num_channels(), out.get_num_samples(), gain,
-             time.monotonic() - t_s)
+        P.attach_times_file(sdir / "recording", prep.times)
+    log.info("session %s: wrote %d channels x %d samples (int16, %.4g uV/bit) in %.0f s [peak RSS %s MB]", sid, out.get_num_channels(), out.get_num_samples(), gain,
+             time.monotonic() - t_s, C.peak_rss_mb())
 
     # figures (read back the saved data for the 'after' panel: it is what the sorter sees)
     import spikeinterface.core as sc
 
     saved = sc.load(sdir / "recording")
     saved_uV = __import__("spikeinterface.preprocessing", fromlist=["scale_to_uV"]).scale_to_uV(saved)
-    t_mid = 0.5 * (prep.t_start + prep.t_stop)
-    cap = F.raw_vs_preprocessed(sdir / f"{sid}_raw_traces.png", sid, prep.raw_uV, saved_uV, prep.channel_labels, t_mid)
+    to_time = P.session_time(prep.times, prep.raw_uV)
+    cap = F.raw_vs_preprocessed(sdir / f"{sid}_raw_traces.png", sid, prep.raw_uV, saved_uV, prep.channel_labels,
+                                prep.raw_uV.get_num_samples() // 2, to_time)
     figures.append({"path": f"{sid}/{sid}_raw_traces.png", "caption": cap})
-    if motion is not None:
+    if motion_info is not None:
         cap = F.drift_raster(sdir / f"{sid}_drift_raster.png", sid, prep.for_motion, motion_info["peaks"], motion_info["peak_locations"], motion,
-                             applied=p["MOTION_CORRECTION"] == "apply")
+                             applied=applied, to_time=to_time)
         figures.append({"path": f"{sid}/{sid}_drift_raster.png", "caption": cap})
+    if motion is not None:
         figures.append(motion_fig)
     figures.append(bad_fig)
 
@@ -340,16 +378,20 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
         "n_channels": out.get_num_channels(),
         "n_channels_source": n_src,
         "bad_channels": prep.bad_channels,
-        "motion_corrected": motion is not None and p["MOTION_CORRECTION"] == "apply",
+        "motion_corrected": applied,
         "motion_estimated": motion is not None,
         "motion_method": motion_method,
+        "motion_source": p["MOTION_SOURCE"] if motion is not None else None,
+        "motion_threshold_um": p["MOTION_THRESHOLD_UM"],
+        "motion_above_threshold": above,
+        "motion_decision": motion_decision,
         "motion": {k: v for k, v in motion_stats.items()} if motion_stats else None,
         **time_info,
         "gain_to_uV": gain,
         "dtype": "int16",
         "has_brain_area": "brain_area" in out.get_property_keys(),
         "preprocessing": prep.steps + ([{"step": "interpolate_motion", "border_mode": "force_extrapolate", "method": "kriging"}]
-                                       if session_motion_applied(motion, p) else []),
+                                       if applied else []),
         "session_start_time": nwb.get("session_start_time"),
         "identifier": nwb.get("identifier"),
         "session_description": nwb.get("session_description"),
@@ -398,8 +440,7 @@ def main() -> int:
         log.error("%s", exc)
         return 2
     threads = C.set_thread_env(p["THREADS"])
-    for var, default in (("MPLCONFIGDIR", "/tmp/matplotlib"), ("NUMBA_CACHE_DIR", "/tmp/numba")):
-        os.environ.setdefault(var, default)
+    C.setup_writable_dirs()
     if not input_dir.is_dir():
         log.error("INPUT_DIR %s is not a folder", input_dir)
         return 1
@@ -411,7 +452,7 @@ def main() -> int:
     # spawn: each worker re-opens the recording from its description. Forked workers would share the parent's
     # HDF5 (NWB) file handle, which HDF5 does not support (workers crash on compressed NWB data), and forking
     # after PyTorch has run (DREDge) is unsafe too.
-    job_kwargs = {"n_jobs": threads, "chunk_duration": "1s", "progress_bar": False, "mp_context": "spawn"}
+    job_kwargs = {"n_jobs": C.worker_count(threads), "chunk_duration": "1s", "progress_bar": False, "mp_context": "spawn"}
     sc.set_global_job_kwargs(**job_kwargs)
     log.info("%s %s: THREADS=%d, parameters %s", APP, app_version(), threads,
              {k: v for k, v in p.items() if k not in ("THREADS",)})
@@ -497,6 +538,7 @@ def _headline(r: dict) -> dict:
            "duration_s": round(s["duration_s"], 3), "t_start": s["t_start"], "t_stop": s["t_stop"],
            "sampling_frequency": s["sampling_frequency"], "n_channels": s["n_channels"], "n_bad_channels": len(s["bad_channels"]),
            "motion_estimated": s["motion_estimated"], "motion_corrected": s["motion_corrected"],
+           "motion_above_threshold": s.get("motion_above_threshold"), "motion_decision": s.get("motion_decision"),
            "median_drift_range_um": m.get("median_drift_range_um"), "max_drift_range_um": m.get("max_drift_range_um"),
            "n_peaks": r.get("n_peaks"), "peaks_per_s": (r["n_peaks"] / s["duration_s"]) if r.get("n_peaks") else None,
            "time_source": s["time_source"]}

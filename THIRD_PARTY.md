@@ -13,7 +13,7 @@ project's repository where the metadata had none (quantities).
 | Neo 0.14.6 | SpikeGLX, Open Ephys, Intan readers | Neo authors and contributors (NeuralEnsemble) | BSD-3-Clause | https://github.com/NeuralEnsemble/python-neo |
 | PyNWB 4.2.0, HDMF 6.2.0 | NWB reading (via SpikeInterface) | Andrew Tritt, Ryan Ly, Oliver Ruebel, Ben Dichter, Matthew Avaylon, Stephanie Prince and contributors (LBNL / NWB) | BSD-3-Clause | https://github.com/NeurodataWithoutBorders/pynwb, https://github.com/hdmf-dev/hdmf |
 | h5py 3.16.0 | HDF5 access (bundles the HDF5 library, BSD-style) | Andrew Collette and contributors | BSD-3-Clause | https://www.h5py.org |
-| PyTorch 2.14.1 (CPU build) | DREDge motion estimation | PyTorch Team (Meta and contributors) | BSD-3-Clause (with bundled Apache-2.0, BSD-2-Clause, BSL-1.0, MIT components) | https://github.com/pytorch/pytorch |
+| PyTorch 2.14.1 (CPU build) | DREDge motion estimation | PyTorch Team (Meta and contributors) | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT (package metadata; PyTorch itself is BSD-3-Clause) | https://github.com/pytorch/pytorch |
 | mtscomp 1.0.2 | Reading IBL compressed `.cbin` | Cyrille Rossant (International Brain Laboratory) | BSD-3-Clause | https://github.com/int-brain-lab/mtscomp |
 | NumPy 2.5.4, SciPy 1.18.1, pandas 3.1.1, scikit-learn 1.9.1 | Arrays, filters, statistics | NumPy, SciPy, pandas, scikit-learn developers | BSD-3-Clause | numpy.org, scipy.org, pandas.pydata.org, scikit-learn.org |
 | numba 0.68.1, llvmlite 0.50.0 | JIT kernels of SpikeInterface | Anaconda, Inc. and contributors | BSD-2-Clause; llvmlite BSD-2-Clause AND Apache-2.0 WITH LLVM-exception | https://numba.pydata.org |

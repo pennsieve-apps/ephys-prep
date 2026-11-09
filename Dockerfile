@@ -16,19 +16,17 @@ RUN pip install --no-deps --only-binary=:all: -r /processor/requirements.txt -r 
 COPY processor/ /processor/processor/
 COPY VERSION /processor/VERSION
 
+# Lambda-safe: no cache paths here (HOME and /tmp are replaced at run time); processor.common.setup_writable_dirs
+# points matplotlib / numba / triton caches at $TMPDIR at startup. USER: getpass with an arbitrary uid.
 ENV PYTHONPATH="/processor" \
     PYTHONUNBUFFERED=1 \
-    HOME=/tmp \
     MPLBACKEND=Agg \
-    MPLCONFIGDIR=/tmp/matplotlib \
-    NUMBA_CACHE_DIR=/tmp/numba \
-    XDG_CACHE_HOME=/tmp/cache
+    USER=app
 
-# Build matplotlib's font cache and import the stack once, so a run needs no writes outside /tmp and no network.
-RUN python -c "import matplotlib.pyplot, spikeinterface.full, spikeinterface.sortingcomponents.motion, pynwb, torch, mtscomp" \
-    && mkdir -p /tmp/matplotlib /tmp/numba /tmp/cache && chmod -R a+rwX /tmp/matplotlib /tmp/numba /tmp/cache
+# Import the stack once: the build fails if a dependency is missing.
+RUN python -c "import matplotlib.pyplot, spikeinterface.full, spikeinterface.sortingcomponents.motion, pynwb, torch, mtscomp"
 
-# Runs as uid 1000 on the platform; PyTorch looks the user up (getpass), so uid 1000 gets a passwd entry.
+# Runs as uid 1000 on ECS (with a passwd entry for getpass) and as an arbitrary user on Lambda (USER=app above).
 RUN useradd --uid 1000 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin processor
 USER 1000
 

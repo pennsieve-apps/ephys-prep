@@ -56,15 +56,21 @@ only Neuropixels.
    Probes with fewer than 32 channels use a noise-level (MAD) rule instead.
 7. **Re-reference**: common median reference over all channels (AIND default), or IBL destriping
    (`highpass_spatial_filter` with automatic gain control: removes stripes shared by nearby channels).
-8. **Drift (motion)**: DREDge (`dredge_fast`: peaks detected at 8 × noise, localised by grid convolution,
-   non-rigid windows of 10 % of the probe length as in AIND), saved as a SpikeInterface `Motion`.
-   **Default `MOTION_CORRECTION=estimate`**: the motion is estimated and shown, but the data are not
-   interpolated. Kilosort4 (`spike-sort`'s gpu variant, `nblocks=5`) and Lupin correct drift themselves, and
-   correcting twice, or interpolating the traces before a sorter that tracks drift itself, costs accuracy
-   (Garcia et al. 2024; AIND sets `compute: true, apply: false`). With `apply` the traces are interpolated
-   (kriging) and `session.json` says `motion_corrected: true`, which makes `spike-sort` switch the sorter's own
-   correction off (Kilosort4 `nblocks=0`). Use `apply` for sorters without drift correction or to look at
-   corrected traces.
+8. **Drift (motion)** is always estimated: DREDge on spikes (`MOTION_SOURCE=ap`, `dredge_fast`: peaks detected at
+   8 × noise, localised by grid convolution, non-rigid windows of 10 % of the probe length as in AIND), or on the
+   LFP (`MOTION_SOURCE=lfp`: the probe's LF stream, band-passed 0.5-250 Hz, resampled to 250 Hz, second spatial
+   derivative, rigid; better when units are sparse or the motion is fast, as in human intraoperative and NHP
+   recordings; Neuropixels 1.0 AP data have no LFP, so it falls back to spikes there). The estimate is saved as a
+   SpikeInterface `Motion` on the session clock, with its largest drift range (µm) and whether that exceeds
+   `MOTION_THRESHOLD_UM` (10 µm).
+   **Whether to interpolate** follows Garcia et al. 2026 and AIND: **Kilosort4 keeps its own drift correction**
+   (spike-sort's gpu variant, `nblocks=5`), so the data are not changed here (default `MOTION_CORRECTION=estimate`);
+   the CPU sorters (Lupin, SpykingCircus2) **interpolate the recording with this estimate in spike-sort, and only
+   when the drift exceeds the threshold** (below ~10 µm interpolation costs more accuracy than it recovers).
+   Correcting twice is never done. `session.json` records the estimate, the threshold and the decision
+   (`motion_above_threshold`, `motion_decision`). `MOTION_CORRECTION=apply` interpolates here instead (kriging)
+   when above the threshold, for sorters outside this workflow; `session.json` then says `motion_corrected: true`
+   and spike-sort corrects nothing (Kilosort4 `nblocks=0`).
 9. **Write** int16 (the source's own µV per bit; for float sources 1/20 of the median noise), clipped, never
    wrapped, as a SpikeInterface `binary_folder` with the probe, `brain_area` and the session-clock timestamps.
 
@@ -89,8 +95,10 @@ only Neuropixels.
 | `EXCLUDE_CHANNELS` | string | (empty) | Extra channel ids to remove. |
 | `MAX_BAD_CHANNEL_FRACTION` | number | `0.5` | A session with more bad channels fails. |
 | `REFERENCE` | string | `cmr` | `cmr` (global median), `destripe` (IBL), `none`. |
-| `MOTION_CORRECTION` | string | `estimate` | `estimate` (default; the sorter corrects), `apply` (interpolate here; the sorter then does not), `none`. |
-| `MOTION_PRESET` | string | `dredge_fast` | `dredge_fast` or `dredge`. |
+| `MOTION_CORRECTION` | string | `estimate` | `estimate` (default: estimate only; spike-sort decides), `apply` (interpolate here when above the threshold; spike-sort then corrects nothing), `none`. |
+| `MOTION_THRESHOLD_UM` | number | `10` | Drift (largest displacement range, µm) above which interpolation is worth it; `0` = always. |
+| `MOTION_SOURCE` | string | `ap` | `ap` (DREDge on spikes) or `lfp` (DREDge on the LFP; human / NHP, sparse units). |
+| `MOTION_PRESET` | string | `dredge_fast` | Spike-based preset: `dredge_fast` or `dredge`. |
 | `BAD_TIMESTAMPS` | string | `drop` | Broken explicit timestamps: `drop` (keep the longest good stretch) or `keep`. |
 | `THREADS` | integer | `0` | Worker processes; `0` = the container's CPU quota. |
 | `SEED` | integer | `42` | Seed of the random chunks for noise and bad-channel estimates. |
@@ -102,8 +110,8 @@ Bad parameters exit 2; no recording found, or every session failed, exit 1; a fa
 | File | Contents |
 |---|---|
 | `<session_id>/recording/` | SpikeInterface `binary_folder`: `traces_cached_seg0.raw` (int16, samples × channels), `times_cached_seg0.raw` (float64 session-clock time of every sample, when the source had timestamps; else `t_start` in `binary.json`), `probegroup.json`, `properties/` (`brain_area` when known, gains). Open with `spikeinterface.load(folder)`. |
-| `<session_id>/motion/` | SpikeInterface `Motion` (`Motion.load`): displacement (µm) per time bin (1 s) and depth window. |
-| `<session_id>/session.json` | `session_id, source, source_format, stream, probe {model, serial, part_number, geometry_source}, sampling_frequency, t_start, t_stop, duration_s, n_channels, n_channels_source, bad_channels [{id, reason}], motion_corrected, motion_estimated, motion_method, motion {max_abs_displacement_um, median_drift_range_um, max_drift_range_um, ...}, time_source, effective_sampling_frequency / nominal_sampling_frequency / clock_difference_percent` (explicit timestamps), `timestamp_problems` (when broken), `gain_to_uV, preprocessing` (every step with its parameters), the source NWB's `session_start_time, identifier, session_description, timestamps_reference_time, subject`, and `sheet` (the session's `sessions.csv` columns). |
+| `<session_id>/motion/` | SpikeInterface `Motion` (`Motion.load`): displacement (µm) per time bin (1 s, session clock) and depth window. |
+| `<session_id>/session.json` | `session_id, source, source_format, stream, probe {model, serial, part_number, geometry_source}, sampling_frequency, t_start, t_stop, duration_s, n_channels, n_channels_source, bad_channels [{id, reason}], motion_corrected, motion_estimated, motion_method, motion_source, motion_threshold_um, motion_above_threshold, motion_decision, motion {max_abs_displacement_um, median_drift_range_um, max_drift_range_um, estimate_params}, time_source, effective_sampling_frequency / nominal_sampling_frequency / clock_difference_percent` (explicit timestamps), `timestamp_problems` (when broken), `gain_to_uV, preprocessing` (every step with its parameters), the source NWB's `session_start_time, identifier, session_description, timestamps_reference_time, subject`, and `sheet` (the session's `sessions.csv` columns). |
 | `<session_id>/<session_id>_raw_traces.png` | 0.2 s of every channel by depth, raw vs preprocessed. |
 | `<session_id>/<session_id>_bad_channels.png` | Noise per channel along the probe, coloured by bad-channel label. |
 | `<session_id>/<session_id>_drift_raster.png` | Detected spikes by time and depth, before and after the motion estimate. |
@@ -140,8 +148,10 @@ RUNTIME
 - Bad-channel detection's "outside the brain" rule assumes the top of the probe is the end that leaves the brain
   (Neuropixels, inserted tip first). On a simulation or a probe fully in tissue it can flag quiet channels at the
   top (it flagged 38 of 120 on the DANDI:001250 simulation): use `BAD_CHANNELS=dead-noisy` there.
-- Motion is estimated from spikes; a probe with few active channels, or under 150 µm long, is not estimated, and
-  tetrodes / sparse arrays get no drift estimate. DREDge assumes motion along the probe (y) only.
+- A probe with fewer than 16 channels or under 150 µm long gets no drift estimate (tetrodes, sparse arrays). DREDge
+  assumes motion along the probe (y) only; the LFP estimate is rigid (one displacement for the whole probe).
+- The 10 µm threshold is a rule of thumb from simulations (Garcia et al. 2026), not a law: with fast, non-rigid
+  motion consider `MOTION_THRESHOLD_UM=0`.
 - Multi-shank probes are processed as one probe (one median reference over all shanks, one motion estimate). Split
   shanks with `STREAM` / a probe JSON if they move independently.
 - Intan "traditional" files that split one session into several `.rhd` files are read as separate sessions.

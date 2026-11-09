@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import json
 from pathlib import Path
 
@@ -94,7 +95,8 @@ def test_outputs(default_run):
     for k in ("session_id", "source", "stream", "probe", "sampling_frequency", "t_start", "t_stop", "duration_s", "n_channels",
               "bad_channels", "motion_corrected", "motion_method", "time_source"):
         assert k in s, k
-    assert s["motion_corrected"] is False and s["motion_estimated"] is True
+    assert s["motion_corrected"] is False and s["motion_estimated"] is True and s["motion_above_threshold"] is True   # 15 um planted
+    assert "spike-sort's CPU sorters interpolate" in s["motion_decision"]
     prov = json.loads((default_run / "provenance.json").read_text())
     assert set(prov) >= {"app", "version", "variant", "tools", "parameters", "inputs", "started", "finished", "wall_seconds",
                          "peak_rss_mb", "gpu", "sessions", "citations"}
@@ -148,11 +150,31 @@ def test_window_outside_fails_session(monkeypatch, fixture_dir, tmp_path):
 
 
 def test_motion_apply_and_stream_selection(monkeypatch, fixture_dir, tmp_path):
-    assert run(monkeypatch, fixture_dir / "nwb2", tmp_path, MOTION_CORRECTION="apply", STREAM="Probe01", BAD_CHANNELS="none") == 0
+    assert run(monkeypatch, fixture_dir / "nwb2", tmp_path, MOTION_CORRECTION="apply", MOTION_THRESHOLD_UM="0", STREAM="Probe01",
+               BAD_CHANNELS="none") == 0
     ids = [r["session_id"] for r in csv.DictReader(open(tmp_path / "ephys-prep" / "sessions.csv"))]
     assert ids == ["twoprobes_probe01"]          # the suffix stays: the file has two probes
     s = json.loads((tmp_path / "ephys-prep" / "twoprobes_probe01" / "session.json").read_text())
     assert s["motion_corrected"] is True and s["n_channels"] <= 64 and abs(s["t_start"] - 5.0) < 1e-9
+    assert s["motion_decision"].startswith("interpolated here")
+
+
+def test_motion_threshold_and_lfp(monkeypatch, fixture_dir, tmp_path):
+    """Drift below MOTION_THRESHOLD_UM is not interpolated even with apply; MOTION_SOURCE=lfp uses the probe's LF series."""
+    assert run(monkeypatch, fixture_dir / "nwb2", tmp_path, MOTION_CORRECTION="apply", MOTION_THRESHOLD_UM="1000", STREAM="Probe00",
+               MOTION_SOURCE="lfp") == 0
+    s = json.loads((tmp_path / "ephys-prep" / "twoprobes_probe00" / "session.json").read_text())
+    assert s["motion_corrected"] is False and s["motion_above_threshold"] is False and s["motion_estimated"] is True
+    assert s["motion_source"] == "lfp" and s["motion"]["estimate_params"]["method"] == "dredge_lfp"
+    assert s["motion"]["estimate_params"]["lfp_stream"] == "ElectricalSeriesProbe00LF"
+    m = load_motion(tmp_path / "ephys-prep" / "twoprobes_probe00" / "motion")
+    assert 5.0 <= m.temporal_bins_s[0][0] < 11.0                    # session clock
+
+
+def load_motion(folder):
+    from spikeinterface.core import Motion
+
+    return Motion.load(folder)
 
 
 def test_preprocessed_signal(default_run, fixture_dir):
@@ -184,3 +206,14 @@ def test_np1_sample_shifts():
     s = R.neuropixels_sample_shifts("PRB_1_4_0480_1_C", 384)
     assert s is not None and s[0] == 0 and s[1] == 0 and abs(s[2] - 1 / 13) < 1e-12 and abs(s.max() - 11 / 13) < 1e-12
     assert R.neuropixels_sample_shifts("PRB_1_4_0480_1_C", 64) is None
+
+
+@pytest.mark.skipif(not os.environ.get("EPHYS_FORMAT_DATA"), reason="set EPHYS_FORMAT_DATA to a folder with spikeglx/, openephys/, intan/ samples")
+@pytest.mark.parametrize("fmt,kind", [("spikeglx", "spikeglx"), ("openephys", "openephys"), ("intan", "intan")])
+def test_vendor_formats(monkeypatch, tmp_path, fmt, kind):
+    """SpikeGLX / Open Ephys binary / Intan readers on real files (e.g. from the NEO ephy_testing_data on GIN,
+    see sample-input/README.md); not in the repository."""
+    src = Path(os.environ["EPHYS_FORMAT_DATA"]) / fmt
+    assert run(monkeypatch, src, tmp_path) == 0
+    rows = list(csv.DictReader(open(tmp_path / "ephys-prep" / "sessions.csv")))
+    assert rows and all(r["status"] == "ok" and r["source_format"] == kind for r in rows)

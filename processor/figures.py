@@ -24,19 +24,20 @@ def _depth_order(rec):
     return order, loc[order, 1]
 
 
-def raw_vs_preprocessed(path: Path, sid: str, raw_uV, pre, labels: dict, t_mid: float, seconds: float = 0.2) -> str:
-    """Two heat maps of the same `seconds` of data, channels by depth: as recorded vs preprocessed."""
+def raw_vs_preprocessed(path: Path, sid: str, raw_uV, pre, labels: dict, i_mid: int, to_time, seconds: float = 0.2) -> str:
+    """Two heat maps of the same `seconds` of data, channels by depth: as recorded vs preprocessed.
+
+    `raw_uV` and `pre` are sample-aligned (the same window); `to_time` maps sample index -> session seconds."""
     plt = _plt()
     fs = raw_uV.get_sampling_frequency()
-    i0 = int(np.clip(raw_uV.time_to_sample_index(t_mid), 0, max(0, raw_uV.get_num_samples() - int(seconds * fs))))
+    i0 = int(np.clip(i_mid, 0, max(0, raw_uV.get_num_samples() - int(seconds * fs))))
     i1 = min(raw_uV.get_num_samples(), i0 + int(seconds * fs))
-    t = raw_uV.sample_index_to_time(i0)
+    t = float(to_time(i0))
     o_raw, d_raw = _depth_order(raw_uV)
     raw = raw_uV.get_traces(start_frame=i0, end_frame=i1)[:, o_raw]
     raw = raw - np.median(raw, axis=0, keepdims=True)
-    j0 = int(np.clip(pre.time_to_sample_index(t), 0, max(0, pre.get_num_samples() - (i1 - i0))))
     o_pre, d_pre = _depth_order(pre)
-    clean = pre.get_traces(start_frame=j0, end_frame=j0 + (i1 - i0))[:, o_pre]
+    clean = pre.get_traces(start_frame=i0, end_frame=i1)[:, o_pre]
     lim = 5 * float(np.median(np.median(np.abs(clean), axis=0) / 0.6745) + 1e-9)
     fig, axes = plt.subplots(1, 2, figsize=(12, 6.5), sharey=True, constrained_layout=True)
     ext_ms = (i1 - i0) / fs * 1000
@@ -89,7 +90,8 @@ def bad_channels(path: Path, sid: str, filtered, labels: dict, noise_uV: dict) -
             "percent bad channels; many more suggests a damaged probe or a reference problem.")
 
 
-def drift_raster(path: Path, sid: str, rec, peaks, peak_locations, motion, applied: bool, max_points: int = 150_000) -> str:
+def drift_raster(path: Path, sid: str, rec, peaks, peak_locations, motion, applied: bool, to_time, max_points: int = 150_000) -> str:
+    """`motion` in `rec`'s own clock (for the correction); `to_time` maps sample index -> session seconds (x axis)."""
     plt = _plt()
     from spikeinterface.sortingcomponents.motion import correct_motion_on_peaks
 
@@ -98,7 +100,7 @@ def drift_raster(path: Path, sid: str, rec, peaks, peak_locations, motion, appli
     if len(idx) > max_points:
         idx = np.sort(rng.choice(idx, max_points, replace=False))
     p, loc = peaks[idx], peak_locations[idx]
-    times = rec.sample_index_to_time(p["sample_index"])
+    times = to_time(p["sample_index"])
     amp = np.abs(p["amplitude"])
     vmax = np.percentile(amp, 95) if len(amp) else 1
     panels = [("as recorded", loc["y"])]
