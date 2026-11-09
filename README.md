@@ -154,7 +154,7 @@ Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 m
 (bad channels 0.5 min, DREDge 12 min, writing 5.5 min); peak memory 4.6 GB in the main process plus ~0.5-1.2 GB per
 worker; 120 s took 2 min. The ground-truth file (120 channels, 60 s) took 1.6 min. **Docker, linux/amd64 under
 emulation** (QEMU, 5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
-container (2 CPUs, 4 GB) took 10 min with 1.7 GB peak; DOCKER_IBL.
+container (2 CPUs, 4 GB) took 5-10 min with 1.9 GB peak; 60 s of the IBL probe (2 CPUs, 4 GB, 2 workers) took 12 min (main process 1.5 GB; the cgroup peak reached its 4 GB limit with page cache of the 6.6 GB NWB file).
 
 Memory scales with the number of workers: each spawned worker holds the stack (~350 MB) and a few 1 s chunks of
 384 channels; peak detection and localisation reach ~1.2 GB per worker. The app caps the workers at
