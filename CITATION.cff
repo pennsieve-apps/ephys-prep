@@ -666,8 +666,9 @@ references:
   - type: other
     value: '40903598'
     description: PubMed ID
-  notes: Authored by the International Brain Laboratory consortium. Author list as in PubMed (PMID 40903598); Crossref's record
-    repeats part of the list, which CITATION.cff cannot hold (authors must be unique).
+  notes: Authored by the International Brain Laboratory consortium. Author list as in PubMed (PMID 40903598, the consortium
+    and 56 members, alphabetical). Crossref's record has 179 person entries (131 distinct, with repeats, and further names
+    not in PubMed's list), which CITATION.cff cannot hold as is (authors must be unique).
 - type: data
   title: Spike sorting biases and information loss in a detailed cortical model
   authors:
