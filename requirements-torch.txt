@@ -1,0 +1,3 @@
+# PyTorch, CPU-only build (no NVIDIA libraries): used by DREDge motion estimation (SpikeInterface sortingcomponents).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu

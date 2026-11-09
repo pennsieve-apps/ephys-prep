@@ -1,0 +1,18 @@
+# Local tests and validation (macOS / Linux): pip install -r requirements-dev.txt
+# (pip resolves for the local platform; the image pins the linux/amd64 set in requirements.txt)
+spikeinterface==0.105.4
+probeinterface==0.4.2
+neo==0.14.6
+pynwb==4.2.0
+h5py==3.16.0
+numpy==2.5.4
+scipy==1.18.1
+numba==0.68.1
+matplotlib==3.11.2
+scikit-learn==1.9.1
+mtscomp==1.0.2
+torch==2.14.1
+pytest==8.4.1
+jsonschema==4.26.0
+PyYAML==6.0.3
+cffconvert==2.0.0

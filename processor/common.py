@@ -1,0 +1,163 @@
+"""Small helpers shared by the processor: threads, JSON, CSV, timing, memory, heartbeat logging."""
+from __future__ import annotations
+
+import csv
+import json
+import logging
+import math
+import os
+import re
+import sys
+import threading
+import time
+from pathlib import Path
+
+log = logging.getLogger("ephys-prep")
+
+SAFE_ID = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def cgroup_cpus() -> int:
+    """CPUs from the cgroup quota (v2 cpu.max, v1 cfs), else the affinity mask; never the host's count alone."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+        if quota != "max":
+            return max(1, math.floor(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    try:
+        q = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
+        per = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())
+        if q > 0 and per > 0:
+            return max(1, q // per)
+    except (OSError, ValueError):
+        pass
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        return max(1, os.cpu_count() or 1)
+
+
+def set_thread_env(threads: int) -> int:
+    """Set the BLAS / OpenMP / numba thread counts. Must run before numpy is imported to take full effect."""
+    n = threads if threads > 0 else cgroup_cpus()
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[var] = str(n)   # SpikeInterface workers each limit themselves to 1 (max_threads_per_worker)
+    if "numba" in sys.modules:
+        import numba
+
+        numba.set_num_threads(max(1, min(n, numba.config.NUMBA_NUM_THREADS)))
+    else:
+        os.environ["NUMBA_NUM_THREADS"] = str(n)
+    return n
+
+
+def cgroup_memory_limit_mb() -> float | None:
+    for p in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            v = Path(p).read_text().strip()
+            if v != "max" and int(v) < 1 << 60:
+                return int(v) / 2**20
+        except (OSError, ValueError):
+            pass
+    return None
+
+
+def peak_rss_mb() -> float | None:
+    """Peak memory: the cgroup's (whole container, includes page cache of written files) when readable, else this process's RSS."""
+    try:
+        import resource
+
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(peak / (1024 * 1024 if sys.platform == "darwin" else 1024), 1)
+    except (ImportError, OSError):
+        return None
+
+
+def current_rss_mb() -> float | None:
+    try:
+        with open("/proc/self/status") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+    except OSError:
+        pass
+    return None
+
+
+def _clean_json(obj):
+    if isinstance(obj, float):
+        return None if math.isnan(obj) or math.isinf(obj) else obj
+    if isinstance(obj, dict):
+        return {str(k): _clean_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_clean_json(v) for v in obj]
+    if isinstance(obj, Path):
+        return str(obj)
+    if hasattr(obj, "tolist") and not isinstance(obj, (str, bytes)):
+        return _clean_json(obj.tolist())
+    if hasattr(obj, "item") and not isinstance(obj, (str, bytes)):
+        try:
+            return _clean_json(obj.item())
+        except (ValueError, AttributeError):
+            return str(obj)
+    return obj
+
+
+def write_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump(_clean_json(data), fh, indent=2)
+        fh.write("\n")
+
+
+def write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
+    with open(path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: _fmt(r.get(k)) for k in columns})
+
+
+def _fmt(v):
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return "" if math.isnan(v) else f"{v:.6g}"
+    return v
+
+
+class Heartbeat:
+    """Logs `what` with elapsed time and memory every `every` seconds until stopped, so long steps never look hung."""
+
+    def __init__(self, what: str, every: float = 60.0, extra=None):
+        self.what, self.every, self.extra = what, every, extra
+        self._stop = threading.Event()
+        self._t0 = time.monotonic()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self):
+        while not self._stop.wait(self.every):
+            msg = f"... {self.what}: {time.monotonic() - self._t0:.0f} s elapsed"
+            rss = current_rss_mb()
+            if rss is not None:
+                msg += f", RSS {rss:.0f} MB"
+            if self.extra is not None:
+                try:
+                    more = self.extra()
+                    if more:
+                        msg += f", {more}"
+                except Exception:   # noqa: BLE001 - a heartbeat must never fail the run
+                    pass
+            log.info(msg)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        self._thread.join(timeout=5)
+        return False
