@@ -183,7 +183,11 @@ Memory scales with the number of workers: each spawned worker holds the stack (~
 384 channels; peak detection and localisation reach ~1.2 GB per worker. The app caps the workers at
 (container memory − 1.5 GB) / 1.2 GB. Chosen: **8 vCPU, 16 GB** (8 workers fit), timeout 6 h: about 20-30 min per
 10 min of a Neuropixels probe on x86 (est.), i.e. ~2-3 h per probe-hour. Disk: the output is the size of the int16
-recording (~83 GB per probe-hour). This is too big for a Lambda step (> 10 GB, > 15 min) except for short windows
+recording (~83 GB per probe-hour), next to the input (the IBL raw NWB is ~40 GB per probe-hour,
+compressed), so the app declares **100 GiB** of local disk (`runtime.diskGiB`), about 45 min of one
+probe. For a longer recording raise the step's disk when you start the run (up to 200 GiB on
+Fargate). The first dev run with the platform's default disk (outputs assumed the size of the inputs)
+ran out of space on 10 min of the IBL probe. This is too big for a Lambda step (> 10 GB, > 15 min) except for short windows
 of small probes.
 
 ## Limitations
