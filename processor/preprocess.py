@@ -229,49 +229,98 @@ def choose_int16_gain(prep: Prepared, rec_final) -> float:
     return max(med / 20.0, 0.01)
 
 
-def check_timestamps(times: np.ndarray, fs: float, tol: float = 0.001, block_s: float = 1.0) -> dict:
-    """Find stretches where explicit timestamps are broken: not increasing, or a local rate off the median by > tol.
+def check_timestamps(times: np.ndarray, fs: float, tol: float = 0.001, block_s: float = 1.0, glitch_window_s: float = 1.0) -> dict:
+    """Classify irregularities of explicit timestamps and repair what can be repaired.
 
-    The rate is measured over blocks of `block_s` (single sample intervals are too noisy). Returns
-    {"ok": bool, "median_rate", "bad_blocks": [[i0, i1), ...] in samples, "keep": (i0, i1) the longest good stretch}.
-    IBL's raw NWB is an example: after a sync-edge mismatch its timestamps run at an apparent 60 kHz.
+    - **Pauses**: a single positive gap (> 2 sample periods) with a normal rate on both sides, e.g. an acquisition
+      paused and resumed (common on DANDI). Kept: no data are dropped; the timestamps carry the gap.
+    - **Glitches**: a few samples whose timestamps go backwards, repeat or jump, within `glitch_window_s`, after
+      which the timestamps are back on the line they were on (span / samples within 1 % of the median period).
+      Repaired by linear interpolation between the good neighbours; no data are dropped.
+    - **Rate faults**: stretches whose local rate (blocks of `block_s`, pauses excluded) is off the median by
+      more than `tol` (0.1 %), or unrepairable glitches, e.g. IBL's sync fault that squeezes 168 s into 84 s.
+      Only these are dropped (by the caller, BAD_TIMESTAMPS=drop): the longest good stretch is kept.
+
+    Returns {"ok", "times" (repaired), "median_rate", "effective_rate", "pauses": [(i, gap_s)], "repaired":
+    [(i0, i1)], "bad_blocks": [[i0, i1)], "keep": (i0, i1)}.
     """
-    n = len(times)
+    t = np.asarray(times, dtype="float64").copy()
+    n = len(t)
+    out = {"ok": True, "times": t, "median_rate": None, "effective_rate": None, "pauses": [], "repaired": [], "bad_blocks": [], "keep": (0, n)}
+    if n < 3:
+        return out
+    dt = np.diff(t)
+    d0 = float(np.median(dt))
+    if d0 <= 0:
+        out.update(ok=False, bad_blocks=[[0, n]])
+        return out
+    bad = np.flatnonzero((dt <= 0.7 * d0) | (dt > 2.0 * d0))
+    W = max(2, int(glitch_window_s / d0))
+    unrepaired = []
+    k = 0
+    while k < len(bad):
+        j1 = j2 = bad[k]
+        while k + 1 < len(bad) and bad[k + 1] - j2 <= W:
+            k += 1
+            j2 = bad[k]
+        k += 1
+        a, b = j1, j2 + 1                                   # samples a (last good) .. b (first good after)
+        if j1 == j2 and dt[j1] > 2.0 * d0:
+            out["pauses"].append((int(j1 + 1), float(dt[j1])))
+            continue
+        span_ok = t[b] > t[a] and abs((t[b] - t[a]) / (b - a) - d0) / d0 < 0.01
+        if span_ok and (b - a) <= W:
+            t[a:b + 1] = np.linspace(t[a], t[b], b - a + 1)
+            out["repaired"].append((int(a + 1), int(b)))
+        else:
+            unrepaired.append((int(a), int(b)))
+    # local rate per block, pauses neutralised
+    dt = np.diff(t)
+    pause_idx = np.array([i - 1 for i, _ in out["pauses"]], dtype=np.int64)
+    dt_rate = dt.copy()
+    if len(pause_idx):
+        dt_rate[pause_idx] = d0
     B = max(2, int(round(block_s * fs)))
-    if n < 2 * B:
-        mono = bool(np.all(np.diff(times) > 0))
-        return {"ok": mono, "median_rate": None, "bad_blocks": [] if mono else [[0, n]], "keep": (0, n)}
-    edges = np.arange(0, n, B)
-    if edges[-1] != n - 1:
-        edges = np.append(edges, n - 1)
-    span = np.diff(times[edges])
-    nsamp = np.diff(edges)
+    edges = np.arange(0, n - 1, B)
+    span = np.add.reduceat(dt_rate, edges)
+    nsamp = np.diff(np.append(edges, n - 1))
     with np.errstate(divide="ignore", invalid="ignore"):
         rate = nsamp / span
     med = float(np.median(rate[np.isfinite(rate) & (rate > 0)]))
     good = np.isfinite(rate) & (rate > 0) & (np.abs(rate - med) / med <= tol)
-    # non-monotonic samples anywhere in a block make it bad
-    bad_idx = np.flatnonzero(np.diff(times) <= 0)
-    if len(bad_idx):
-        good[np.clip(np.searchsorted(edges, bad_idx, side="right") - 1, 0, len(good) - 1)] = False
+    good[-1] = good[-1] or nsamp[-1] < B // 2 and np.isfinite(rate[-1]) and abs(rate[-1] - med) / med <= 10 * tol
+    for a, b in unrepaired:
+        good[np.searchsorted(edges, a, side="right") - 1: np.searchsorted(edges, b, side="right")] = False
+    out["median_rate"] = med
+    ok_dt = np.ones(len(dt), bool)
+    if len(pause_idx):
+        ok_dt[pause_idx] = False
+    out["effective_rate"] = float(ok_dt.sum() / dt[ok_dt].sum())
     if good.all():
-        return {"ok": True, "median_rate": med, "bad_blocks": [], "keep": (0, n)}
-    bad_blocks, best, cur = [], (0, 0), None
-    for k, g in enumerate(good):
+        out["ok"] = not unrepaired
+        return out
+    out["ok"] = False
+    blocks, best, cur = [], (0, 0), None
+    ends = np.append(edges[1:], n)
+    for kk, g in enumerate(good):
         if g:
-            cur = (cur[0], k + 1) if cur else (k, k + 1)
+            cur = (cur[0], kk + 1) if cur else (kk, kk + 1)
             if cur[1] - cur[0] > best[1] - best[0]:
                 best = cur
         else:
             cur = None
-            i0, i1 = int(edges[k]), int(edges[k + 1])
-            if bad_blocks and bad_blocks[-1][1] == i0:
-                bad_blocks[-1][1] = i1
+            i0, i1 = int(edges[kk]), int(ends[kk])
+            if blocks and blocks[-1][1] == i0:
+                blocks[-1][1] = i1
             else:
-                bad_blocks.append([i0, i1])
-    keep = (int(edges[best[0]]), int(edges[best[1]]) + (1 if best[1] == len(good) else 0))
-    return {"ok": False, "median_rate": med, "bad_blocks": bad_blocks, "keep": keep}
-
+                blocks.append([i0, i1])
+    out["bad_blocks"] = blocks
+    out["keep"] = (int(edges[best[0]]), int(ends[best[1] - 1]))
+    kt = t[out["keep"][0]:out["keep"][1]]
+    kd = np.diff(kt)
+    m = kd < 2.0 * d0
+    out["effective_rate"] = float(m.sum() / kd[m].sum()) if m.any() else med
+    return out
 
 def session_time(prep_times, rec):
     """sample index (of `rec`) -> seconds on the session clock: the explicit timestamps, else t_start + i / rate."""
@@ -289,9 +338,15 @@ def motion_to_session_clock(motion, rec, prep_times):
 
     fs, t0 = rec.get_sampling_frequency(), rec.get_start_time()
     bins = []
+    pt = np.asarray(prep_times)
     for tb in motion.temporal_bins_s:
         idx = (np.asarray(tb) - t0) * fs
-        bins.append(np.interp(idx, np.arange(len(prep_times)), prep_times))
+        tt = np.interp(idx, np.arange(len(pt)), pt)
+        # bin centres outside the data (the last bin of a partial second) are extrapolated at the rate, not clamped
+        over, under = idx > len(pt) - 1, idx < 0
+        tt[over] = pt[-1] + (idx[over] - (len(pt) - 1)) / fs
+        tt[under] = pt[0] + idx[under] / fs
+        bins.append(tt)
     return Motion(displacement=motion.displacement, temporal_bins_s=bins, spatial_bins_um=motion.spatial_bins_um,
                   direction=motion.direction, interpolation_method=motion.interpolation_method)
 

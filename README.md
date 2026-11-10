@@ -39,11 +39,22 @@ only Neuropixels.
    recording, else a single 20 µm column is assumed (with a warning). Brain areas (NWB electrodes `location`) are
    kept as the channel property `brain_area`.
 2. **Clock.** Times are seconds on the session clock: the NWB file's own `timestamps` when it has them (IBL raw
-   NWB: the probe synchronised to the NIDQ clock), else the start time plus samples / rate. Timestamps are
-   checked: stretches that are not increasing, or whose local rate (1 s blocks) is off the median by more than
-   0.1 % (a broken sync, as in the last 168 s of IBL's raw file for this session), are reported and, by default,
-   dropped (the longest good stretch is kept; `BAD_TIMESTAMPS`). The effective rate and its difference from the
-   nominal rate are recorded when they differ by more than 0.1 %.
+   NWB: the probe synchronised to the NIDQ clock), else the start time plus samples / rate. Explicit timestamps
+   are checked and classified:
+   - **pauses** (one positive gap with a normal rate on both sides, e.g. a paused acquisition) are kept: no data
+     are dropped, the timestamps carry the gap (the sorter sees the samples back to back);
+   - **glitches** (a few samples going backwards, repeating or jumping, within 1 s, after which the timestamps are
+     back on their line) are repaired by interpolating between the good neighbours;
+   - **rate faults** (a stretch whose rate over 1 s blocks is more than 0.1 % off the median, such as the last
+     168 s of IBL's raw file for this session, where a sync fault squeezes 168 s into 84 s) and unrepairable
+     glitches are dropped by default (`BAD_TIMESTAMPS=drop`: the longest good stretch is kept; `keep` uses them).
+   All of it is recorded in `session.json` (`timestamp_problems`) and `summary.json`.
+   **Sampling rate**: with explicit timestamps the recording's `sampling_frequency` is their effective rate over
+   the session (samples / time, pauses excluded): 30,000.48 Hz for the IBL probe, where SpikeInterface's own
+   estimate from the first 1,000 intervals is 29,997.0 Hz (70 ms off after 10 min). The times file
+   (`times_cached_seg0.raw`) is the authority; use `recording.get_times()` / `sample_index_to_time`, not
+   samples / rate, to get seconds. The difference from the nominal rate (30 kHz for Neuropixels) is recorded and
+   reported when above 0.1 %.
 3. **Window** (`T_START`, `DURATION`) on the session clock; never re-zeroed.
 4. **Phase shift** (Neuropixels): the probe's ADCs sample channels in turn, up to 0.85 samples apart (NP 1.0);
    this delay is undone (IBL `fshift`, SpikeInterface `phase_shift`, 100 ms margin) so a spike reaches neighbouring
@@ -148,6 +159,13 @@ of drift, a 60 Hz + 3 Hz common signal): both planted bad channels are found, th
 (noise 9 µV), DREDge recovers the drift (12.9 µm median range for 15 µm planted, over 20 s), timestamps that run
 0.2 % fast are kept as they are (and reported), and a broken stretch of timestamps is dropped.
 
+**Vendor formats** (opt-in test `EPHYS_FORMAT_DATA`, files from NEO's `ephy_testing_data` on GIN, not in the
+repository): SpikeGLX (a real NP 1.0 `.ap.meta`, `PRB_1_4_0480_1`, with 12 s of synthetic traces: 384 channels,
+phase shift applied), Open Ephys binary (a real v0.6 Neuropix-PXI `settings.xml` / `structure.oebin`, 10 s of
+synthetic traces: the AP stream is read, LFP and NI-DAQ streams skipped, the sample-number clock kept at
+727.9 s) and Intan (a real `.rhd` file, 192 amplifier channels, 1 s; no geometry, so one column is assumed and
+flagged) all process to `status ok`. Raw NWB was tested on the IBL file and the fixtures.
+
 ## Runtime
 
 Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 min probe took **18 min**
@@ -175,6 +193,8 @@ of small probes.
 - Multi-shank probes are processed as one probe (one median reference over all shanks, one motion estimate). Split
   shanks with `STREAM` / a probe JSON if they move independently.
 - Intan "traditional" files that split one session into several `.rhd` files are read as separate sessions.
+- A recording without probe geometry (Intan or raw binary without a probeinterface JSON) is processed as one 20 µm
+  column, with a prominent warning in the log and `summary.json`, and no drift estimate: add a `<name>.probe.json`.
 - The phase shift needs the probe's ADC layout: known for Neuropixels from SpikeGLX/Open Ephys metadata or an NWB
   device naming the part number; other NWB Neuropixels files are not shifted (logged).
 - Nothing here decides what is a neuron: that is `spike-sort` and `ephys-curate`.

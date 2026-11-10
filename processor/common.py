@@ -64,12 +64,15 @@ def cgroup_memory_limit_mb() -> float | None:
 
 
 def peak_rss_mb() -> float | None:
-    """Peak memory: the cgroup's (whole container, includes page cache of written files) when readable, else this process's RSS."""
+    """Peak resident memory of the largest single process: this one or its largest finished worker
+    (RUSAGE_SELF / RUSAGE_CHILDREN maxima; not the sum over workers, and not the container's cgroup peak,
+    which also counts page cache)."""
     try:
         import resource
 
-        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return round(peak / (1024 * 1024 if sys.platform == "darwin" else 1024), 1)
+        unit = 1024 * 1024 if sys.platform == "darwin" else 1024     # bytes on macOS, KiB on Linux
+        peak = max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+        return round(peak / unit, 1)
     except (ImportError, OSError):
         return None
 

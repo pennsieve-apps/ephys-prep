@@ -188,6 +188,12 @@ def process_session(item: dict, p: dict, out_root: Path, input_dir: Path, job_kw
     src, st = item["source"], item["stream"]
     rec_all = st.open()
     rec_all, probe_info = R.attach_probe(rec_all, src, dict(st.probe))
+    if str(probe_info.get("geometry_source", "")).startswith("none"):
+        msg = (f"{item['session_id']}: NO PROBE GEOMETRY for {src.path.name} ({rec_all.get_num_channels()} channels): one 20 um column "
+               "was assumed, so bad-channel detection and drift are unreliable and drift is not estimated. Add a probeinterface "
+               "JSON next to the recording (<name>.probe.json).")
+        log.warning(msg)
+        warnings.append(msg)
     n_seg = rec_all.get_num_segments()
     results = []
     for seg in range(n_seg):
@@ -229,12 +235,27 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
              st.time_source, t_last - t_first, t_first, t_last)
     if tv is not None:
         chk = P.check_timestamps(np.asarray(tv), fs)
-        if not chk["ok"]:
+        tv = chk["times"]
+        tp: dict = {}
+        if chk["pauses"]:
+            tp["pauses"] = [{"sample": i, "t": float(tv[i]), "gap_s": g} for i, g in chk["pauses"]]
+            msg = (f"{sid}: {len(chk['pauses'])} pause(s) in the recording ("
+                   + "; ".join(f"{g:.3f} s at {float(tv[i]):.3f} s" for i, g in chk["pauses"][:5])
+                   + "): kept; the timestamps carry the gaps (sorters see the samples back to back)")
+            log.warning(msg)
+            warnings.append(msg)
+        if chk["repaired"]:
+            tp["repaired"] = [{"from_sample": a, "to_sample": b, "t": float(tv[a])} for a, b in chk["repaired"]]
+            msg = (f"{sid}: {len(chk['repaired'])} timestamp glitch(es) (backwards / repeated / jumping samples) repaired by "
+                   "interpolation between their good neighbours: " + "; ".join(f"samples {a}-{b}" for a, b in chk["repaired"][:5]))
+            log.warning(msg)
+            warnings.append(msg)
+        if chk["bad_blocks"] or not chk["ok"]:
             bad = [[float(tv[a]), float(tv[min(b, len(tv) - 1)]), int(b - a)] for a, b in chk["bad_blocks"]]
             k0, k1 = chk["keep"]
             msg = (f"{sid}: timestamps are broken in {len(bad)} stretch(es) "
                    + "; ".join(f"{a:.3f}-{b:.3f} s ({n} samples)" for a, b, n in bad[:5])
-                   + f" (not increasing, or a local rate more than 0.1 % off the median {chk['median_rate']:.3f} Hz)")
+                   + f" (a local rate more than 0.1 % off the median {chk['median_rate']:.3f} Hz, or an unrepairable glitch)")
             if p["BAD_TIMESTAMPS"] == "drop":
                 msg += f"; BAD_TIMESTAMPS=drop keeps the longest good stretch, samples {k0}-{k1} ({float(tv[k0]):.3f}-{float(tv[k1 - 1]):.3f} s)"
                 rec = rec.frame_slice(k0, k1)
@@ -243,19 +264,26 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
                 msg += "; BAD_TIMESTAMPS=keep: the timestamps are used as they are"
             log.warning(msg)
             warnings.append(msg)
-            time_info["timestamp_problems"] = {"bad_stretches": [{"t_from": a, "t_to": b, "n_samples": n} for a, b, n in bad],
-                                               "median_rate": chk["median_rate"], "action": p["BAD_TIMESTAMPS"],
-                                               "kept_samples": [k0, k1] if p["BAD_TIMESTAMPS"] == "drop" else None}
+            tp.update(bad_stretches=[{"t_from": a, "t_to": b, "n_samples": n} for a, b, n in bad], action=p["BAD_TIMESTAMPS"],
+                      kept_samples=[k0, k1] if p["BAD_TIMESTAMPS"] == "drop" else None)
+        if tp:
+            tp["median_rate"] = chk["median_rate"]
+            time_info["timestamp_problems"] = tp
         if len(tv) > 1:
-            eff = (len(tv) - 1) / float(tv[-1] - tv[0])
+            eff = float(chk["effective_rate"] or (len(tv) - 1) / float(tv[-1] - tv[0]))
             nominal = nominal_rate(eff, probe_info)
             drift = (eff - nominal) / nominal * 100
-            time_info.update(effective_sampling_frequency=eff, nominal_sampling_frequency=nominal, clock_difference_percent=drift)
+            time_info.update(effective_sampling_frequency=eff, nominal_sampling_frequency=nominal, clock_difference_percent=drift,
+                             sampling_frequency_source="effective rate of the timestamps (pauses excluded); the times file is authoritative")
             if abs(drift) > 0.1:
                 msg = (f"{sid}: timestamps give an effective rate of {eff:.3f} Hz vs {nominal:.3f} Hz nominal ({drift:+.3f} %); "
                        "times come from the timestamps")
                 log.warning(msg)
                 warnings.append(msg)
+            # The recording's sampling_frequency: the effective rate of the timestamps, not SpikeInterface's estimate from
+            # the first 1000 intervals (29,997.0 Hz for IBL vs 30,000.48 Hz over the session: 70 ms off after 10 min).
+            R.set_sampling_frequency(rec, eff)
+            fs = eff
 
     shifts = None
     if "inter_sample_shift" not in rec.get_property_keys():
@@ -280,6 +308,8 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
     n_peaks = None
     if p["MOTION_CORRECTION"] != "none":
         ok, why = P.motion_feasible(prep.for_motion)
+        if str(probe_info.get("geometry_source", "")).startswith("none"):
+            ok, why = False, "no probe geometry (a 20 um column was assumed)"
         if not ok:
             log.info("session %s: motion not estimated: %s", sid, why)
             motion_method = f"none ({why})"
@@ -371,7 +401,7 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
         "source_format": src.kind,
         "stream": st.label,
         "probe": {k: probe_info.get(k) for k in ("model", "serial", "part_number", "geometry_source") if probe_info.get(k)},
-        "sampling_frequency": fs,
+        "sampling_frequency": float(out.get_sampling_frequency()),
         "t_start": prep.t_start,
         "t_stop": prep.t_stop,
         "duration_s": prep.t_stop - prep.t_start,
@@ -547,5 +577,5 @@ def _headline(r: dict) -> dict:
     if "clock_difference_percent" in s:
         out["effective_sampling_frequency"] = s["effective_sampling_frequency"]
         out["clock_difference_percent"] = s["clock_difference_percent"]
-    out.update(s.get("sheet", {}))
+    out.update({k: v for k, v in s.get("sheet", {}).items() if k not in out})    # sheet columns never overwrite measured values
     return out

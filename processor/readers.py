@@ -378,3 +378,14 @@ def _open_nwb_lfp(path: Path, series: dict):
 
     rec = se.read_nwb_recording(path, electrical_series_path=series["path"], load_time_vector=False)
     return rec, (read_nwb_timestamps(path, series["path"]) if series["timestamps"] else None), series["name"]
+
+
+def set_sampling_frequency(rec, fs: float) -> None:
+    """Set a recording's sampling frequency in place (and its segments'), before preprocessing is chained on it."""
+    rec._sampling_frequency = float(fs)
+    for seg in rec._recording_segments:
+        if getattr(seg, "_sampling_frequency", None) is not None:
+            seg._sampling_frequency = float(fs)
+    parent = getattr(rec, "_parent", None) or getattr(rec, "_parent_recording", None)
+    if parent is not None and parent is not rec and abs(parent.get_sampling_frequency() - fs) > 1e-9:
+        set_sampling_frequency(parent, fs)

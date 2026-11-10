@@ -191,15 +191,29 @@ def test_preprocessed_signal(default_run, fixture_dir):
 def test_check_timestamps_unit():
     fs = 1000.0
     t = np.arange(20_000) / fs
-    assert P.check_timestamps(t, fs)["ok"]
+    r = P.check_timestamps(t, fs)
+    assert r["ok"] and not r["pauses"] and abs(r["effective_rate"] - fs) < 1e-6
+    # IBL-like sync fault: the last quarter runs at twice the rate -> dropped, the longest good stretch kept
     t2 = t.copy()
     t2[15_000:] = t2[15_000] + np.arange(5000) / (2 * fs)
     r = P.check_timestamps(t2, fs)
     assert not r["ok"] and r["keep"] == (0, 15_000)
+    # a 10-sample glitch (stuck clock) is repaired, nothing dropped
     t3 = t.copy()
     t3[3000:3010] = t3[2999]
     r = P.check_timestamps(t3, fs)
-    assert not r["ok"] and r["keep"][0] >= 3000
+    assert r["ok"] and r["keep"] == (0, 20_000) and r["repaired"] and np.allclose(r["times"], t)
+    # 10 samples jumping backwards by 1 s: repaired too
+    t4 = t.copy()
+    t4[8000:8010] -= 1.0
+    r = P.check_timestamps(t4, fs)
+    assert r["ok"] and r["keep"] == (0, 20_000) and np.allclose(r["times"], t)
+    # a 30 s acquisition pause: kept, recorded, not dropped; the effective rate ignores the gap
+    t5 = t.copy()
+    t5[12_000:] += 30.0
+    r = P.check_timestamps(t5, fs)
+    assert r["ok"] and r["keep"] == (0, 20_000) and r["pauses"] == [(12_000, pytest.approx(30.001))]
+    assert abs(r["effective_rate"] - fs) < 1e-6
 
 
 def test_np1_sample_shifts():
@@ -217,3 +231,14 @@ def test_vendor_formats(monkeypatch, tmp_path, fmt, kind):
     assert run(monkeypatch, src, tmp_path) == 0
     rows = list(csv.DictReader(open(tmp_path / "ephys-prep" / "sessions.csv")))
     assert rows and all(r["status"] == "ok" and r["source_format"] == kind for r in rows)
+
+
+def test_sheet_columns_do_not_overwrite_measurements(monkeypatch, fixture_dir, tmp_path):
+    """A sessions.csv with columns named like measured values (t_start, probe) must not replace them in summary.json."""
+    import shutil
+
+    shutil.copytree(fixture_dir / "input", tmp_path / "in")
+    (tmp_path / "in" / "sessions.csv").write_text("session_id,path,subject_id,t_start,probe\nS1,sub-fixture_ses-01,fix01,999,Probe01\n")
+    assert run(monkeypatch, tmp_path / "in", tmp_path / "out", MOTION_CORRECTION="none") == 0
+    h = json.loads((tmp_path / "out" / "ephys-prep" / "summary.json").read_text())["sessions"]["S1"]
+    assert h["t_start"] == pytest.approx(100.0) and h["subject_id"] == "fix01" and h["probe"] != "Probe01"
