@@ -30,6 +30,10 @@ runtime:
   computeTypes:
     - standard
   timeoutSeconds: 21600
+  # Local disk: the input NWB (IBL raw, ~40 GB per probe-hour compressed) plus the int16 output
+  # (~83 GB per probe-hour) and scratch. 100 GiB holds about 45 min of one Neuropixels probe;
+  # raise it per run (diskGiB) for longer recordings.
+  diskGiB: 100
 parameters:
   - name: T_START
     type: number
