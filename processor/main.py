@@ -483,7 +483,7 @@ def main() -> int:
     # spawn: each worker re-opens the recording from its description. Forked workers would share the parent's
     # HDF5 (NWB) file handle, which HDF5 does not support (workers crash on compressed NWB data), and forking
     # after PyTorch has run (DREDge) is unsafe too.
-    job_kwargs = {"n_jobs": C.worker_count(threads), "chunk_duration": "1s", "progress_bar": False, "mp_context": "spawn"}
+    job_kwargs = C.job_kwargs_for(threads)
     sc.set_global_job_kwargs(**job_kwargs)
     log.info("%s %s: THREADS=%d, parameters %s", APP, app_version(), threads,
              {k: v for k, v in p.items() if k not in ("THREADS",)})
@@ -504,7 +504,9 @@ def main() -> int:
         log.error("no spike-band streams to process (check STREAM)")
         return 1
 
-    out_root = output_dir / APP
+    # Two output ports (conventions.md): `recording` (the data, plus the small files) and `qc` (only the small files:
+    # session / sort json, figures, summary, provenance), so the report can be linked without the data.
+    out_root = output_dir / "recording" / APP
     out_root.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
     rows: list[dict] = []
@@ -556,6 +558,7 @@ def main() -> int:
                      for r in rows},
         "citations": cites,
     })
+    C.copy_small_files(out_root, output_dir / "qc" / APP)
     log.info("%s done: %d of %d sessions ok in %.0f s, peak RSS %s MB", APP, len(ok), len(rows), time.monotonic() - t0, C.peak_rss_mb())
     return 0 if ok else 1
 

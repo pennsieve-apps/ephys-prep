@@ -151,6 +151,7 @@ parameters:
 inputs:
   - name: recording
     description: >-
+      Written to OUTPUT_DIR/recording/ephys-prep/.
       Raw recordings, found by name and content anywhere below: SpikeGLX (*.ap.bin + .meta, or
       IBL *.ap.cbin), Open Ephys (binary or legacy; the folder with "Record Node" folders),
       Intan (*.rhd / *.rhs), NWB files with an ElectricalSeries in acquisition/ (spike band,
@@ -183,6 +184,15 @@ outputs:
       - text/csv
       - image/png
 
+  - name: qc
+    description: >-
+      The small files only, for linking into the report without the data (OUTPUT_DIR/qc/ephys-prep/):
+      sessions.csv, summary.json, provenance.json, and per session session.json and the QC
+      figures (PNG). Same paths as in the recording port.
+    mediaTypes:
+      - application/json
+      - text/csv
+      - image/png
 # How a release is tested before it is made public: the inputs a review run uses.
 # See app-deploy-service docs/app-manifest-review.md. The generator needs numpy only.
 review:

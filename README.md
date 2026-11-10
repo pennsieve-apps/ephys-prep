@@ -90,7 +90,8 @@ only Neuropixels.
 | Port | Kind | Files | Notes |
 |---|---|---|---|
 | `recording` | input | raw recordings (see Method 1), optional `sessions.csv`, optional probeinterface JSON | Found by name and content anywhere below, following symlinks. |
-| `recording` | output | `ephys-prep/...` (below) | The only output: the whole of `OUTPUT_DIR`. |
+| `recording` | output | `OUTPUT_DIR/recording/ephys-prep/...` (below) | The data and the small files. |
+| `qc` | output | `OUTPUT_DIR/qc/ephys-prep/`: `sessions.csv`, `summary.json`, `provenance.json`, `<session_id>/session.json` and the four QC PNGs | Only the small files, at the same relative paths, so the report (a Lambda step) can be linked without the data. |
 
 ## Parameters
 
@@ -116,7 +117,7 @@ only Neuropixels.
 
 Bad parameters exit 2; no recording found, or every session failed, exit 1; a failed session is logged and skipped.
 
-## Outputs (`OUTPUT_DIR/ephys-prep/`)
+## Outputs (`OUTPUT_DIR/recording/ephys-prep/`; the small files also in `OUTPUT_DIR/qc/ephys-prep/`)
 
 | File | Contents |
 |---|---|

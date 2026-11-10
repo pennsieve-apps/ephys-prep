@@ -201,3 +201,40 @@ def setup_writable_dirs() -> str:
         os.makedirs(os.environ[var], exist_ok=True)
     os.environ.setdefault("USER", "app")           # getpass (torch) with an arbitrary uid and no passwd entry
     return tmp
+
+
+def process_pool_available() -> bool:
+    """Whether worker *processes* can be used: Python's multiprocessing needs POSIX semaphores, which live in
+    /dev/shm. Lambda has no /dev/shm (nor does `docker run --ipc none`); there SpikeInterface runs on threads."""
+    try:
+        import multiprocessing as mp
+
+        mp.get_context("spawn").Lock()
+        return True
+    except (OSError, ImportError):
+        return False
+
+
+def job_kwargs_for(threads: int) -> dict:
+    """SpikeInterface job_kwargs: spawned worker processes (capped by memory) when possible, else threads."""
+    if process_pool_available():
+        return {"n_jobs": worker_count(threads), "chunk_duration": "1s", "progress_bar": False, "pool_engine": "process",
+                "mp_context": "spawn"}
+    log.info("no /dev/shm (POSIX semaphores unavailable): SpikeInterface runs on %d threads instead of worker processes", threads)
+    return {"n_jobs": threads, "chunk_duration": "1s", "progress_bar": False, "pool_engine": "thread"}
+
+
+QC_SKIP_DIRS = {"recording", "motion", "sorting", "sorter_output", "kilosort_motion", "_run"}
+
+
+def copy_small_files(src_root: Path, dst_root: Path) -> None:
+    """The `qc` port: every file of the app's top folder except the data folders (recording, motion, sorting,
+    sorter_output), keeping the relative paths, so summary.json's figure paths work in both ports."""
+    import shutil
+
+    for dirpath, dirnames, filenames in os.walk(src_root):
+        dirnames[:] = [d for d in dirnames if d not in QC_SKIP_DIRS]
+        rel = Path(dirpath).relative_to(src_root)
+        for f in filenames:
+            (dst_root / rel).mkdir(parents=True, exist_ok=True)
+            shutil.copy2(Path(dirpath) / f, dst_root / rel / f)

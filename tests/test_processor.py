@@ -42,7 +42,7 @@ def default_run(fixture_dir, tmp_path_factory) -> Path:
         assert run(mp, fixture_dir, out) == 0
     finally:
         mp.undo()
-    return out / "ephys-prep"
+    return out / "recording" / "ephys-prep"
 
 
 def load(folder):
@@ -101,6 +101,10 @@ def test_outputs(default_run):
     assert set(prov) >= {"app", "version", "variant", "tools", "parameters", "inputs", "started", "finished", "wall_seconds",
                          "peak_rss_mb", "gpu", "sessions", "citations"}
     summ = json.loads((default_run / "summary.json").read_text())
+    qc = default_run.parent.parent / "qc" / "ephys-prep"                 # the small-files port
+    assert (qc / "summary.json").exists() and (qc / "sub-fixture_ses-01" / "session.json").exists()
+    assert not (qc / "sub-fixture_ses-01" / "recording").exists() and not (qc / "sub-fixture_ses-01" / "motion").exists()
+    assert all((qc / f["path"]).exists() for f in summ["figures"]) and all(t["path"] and t["caption"] for t in summ["tables"])
     assert all(f["caption"] for f in summ["figures"]) and summ["sessions"]["sub-fixture_ses-01"]["n_bad_channels"] >= 2
 
 
@@ -142,9 +146,9 @@ def test_broken_timestamps_dropped(default_run):
 
 def test_window_on_session_clock(monkeypatch, fixture_dir, tmp_path):
     assert run(monkeypatch, fixture_dir / "input", tmp_path, T_START="103.5", DURATION="4", MOTION_CORRECTION="none") == 0
-    rec = load(tmp_path / "ephys-prep" / "sub-fixture_ses-01" / "recording")
+    rec = load(tmp_path / "recording" / "ephys-prep" / "sub-fixture_ses-01" / "recording")
     assert abs(rec.get_start_time() - 103.5) < 1 / make_fixture.FS and abs(rec.get_total_duration() - 4.0) < 1e-3
-    assert not (tmp_path / "ephys-prep" / "sub-fixture_ses-01" / "motion").exists()
+    assert not (tmp_path / "recording" / "ephys-prep" / "sub-fixture_ses-01" / "motion").exists()
 
 
 def test_window_outside_fails_session(monkeypatch, fixture_dir, tmp_path):
@@ -154,9 +158,9 @@ def test_window_outside_fails_session(monkeypatch, fixture_dir, tmp_path):
 def test_motion_apply_and_stream_selection(monkeypatch, fixture_dir, tmp_path):
     assert run(monkeypatch, fixture_dir / "nwb2", tmp_path, MOTION_CORRECTION="apply", MOTION_THRESHOLD_UM="0", STREAM="Probe01",
                BAD_CHANNELS="none") == 0
-    ids = [r["session_id"] for r in csv.DictReader(open(tmp_path / "ephys-prep" / "sessions.csv"))]
+    ids = [r["session_id"] for r in csv.DictReader(open(tmp_path / "recording" / "ephys-prep" / "sessions.csv"))]
     assert ids == ["twoprobes_probe01"]          # the suffix stays: the file has two probes
-    s = json.loads((tmp_path / "ephys-prep" / "twoprobes_probe01" / "session.json").read_text())
+    s = json.loads((tmp_path / "recording" / "ephys-prep" / "twoprobes_probe01" / "session.json").read_text())
     assert s["motion_corrected"] is True and s["n_channels"] <= 64 and abs(s["t_start"] - 5.0) < 1e-9
     assert s["motion_decision"].startswith("interpolated here")
 
@@ -165,11 +169,11 @@ def test_motion_threshold_and_lfp(monkeypatch, fixture_dir, tmp_path):
     """Drift below MOTION_THRESHOLD_UM is not interpolated even with apply; MOTION_SOURCE=lfp uses the probe's LF series."""
     assert run(monkeypatch, fixture_dir / "nwb2", tmp_path, MOTION_CORRECTION="apply", MOTION_THRESHOLD_UM="1000", STREAM="Probe00",
                MOTION_SOURCE="lfp") == 0
-    s = json.loads((tmp_path / "ephys-prep" / "twoprobes_probe00" / "session.json").read_text())
+    s = json.loads((tmp_path / "recording" / "ephys-prep" / "twoprobes_probe00" / "session.json").read_text())
     assert s["motion_corrected"] is False and s["motion_above_threshold"] is False and s["motion_estimated"] is True
     assert s["motion_source"] == "lfp" and s["motion"]["estimate_params"]["method"] == "dredge_lfp"
     assert s["motion"]["estimate_params"]["lfp_stream"] == "ElectricalSeriesProbe00LF"
-    m = load_motion(tmp_path / "ephys-prep" / "twoprobes_probe00" / "motion")
+    m = load_motion(tmp_path / "recording" / "ephys-prep" / "twoprobes_probe00" / "motion")
     assert 5.0 <= m.temporal_bins_s[0][0] < 11.0                    # session clock
 
 
@@ -231,7 +235,7 @@ def test_vendor_formats(monkeypatch, tmp_path, fmt, kind):
     see sample-input/README.md); not in the repository."""
     src = Path(os.environ["EPHYS_FORMAT_DATA"]) / fmt
     assert run(monkeypatch, src, tmp_path) == 0
-    rows = list(csv.DictReader(open(tmp_path / "ephys-prep" / "sessions.csv")))
+    rows = list(csv.DictReader(open(tmp_path / "recording" / "ephys-prep" / "sessions.csv")))
     assert rows and all(r["status"] == "ok" and r["source_format"] == kind for r in rows)
 
 
@@ -242,5 +246,5 @@ def test_sheet_columns_do_not_overwrite_measurements(monkeypatch, fixture_dir, t
     shutil.copytree(fixture_dir / "input", tmp_path / "in")
     (tmp_path / "in" / "sessions.csv").write_text("session_id,path,subject_id,t_start,probe\nS1,sub-fixture_ses-01,fix01,999,Probe01\n")
     assert run(monkeypatch, tmp_path / "in", tmp_path / "out", MOTION_CORRECTION="none") == 0
-    h = json.loads((tmp_path / "out" / "ephys-prep" / "summary.json").read_text())["sessions"]["S1"]
+    h = json.loads((tmp_path / "out" / "recording" / "ephys-prep" / "summary.json").read_text())["sessions"]["S1"]
     assert h["t_start"] == pytest.approx(100.0) and h["subject_id"] == "fix01" and h["probe"] != "Probe01"
