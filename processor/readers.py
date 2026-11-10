@@ -151,6 +151,18 @@ def nwb_identity(path: Path) -> dict:
             if key in f:
                 v = f[key][()]
                 out[key] = v.decode() if isinstance(v, bytes) else str(v)
+        # session metadata ephys-curate copies into the units NWB (general/*); session_id is the source's own
+        for key, name in (("institution", "institution"), ("lab", "lab"), ("experimenter", "experimenter"),
+                          ("experiment_description", "experiment_description"), ("keywords", "keywords"),
+                          ("session_id", "nwb_session_id"), ("protocol", "protocol")):
+            path = f"general/{key}" if key != "keywords" else "general/keywords"
+            if path in f:
+                v = f[path][()]
+                if isinstance(v, bytes):
+                    v = v.decode()
+                elif hasattr(v, "tolist"):
+                    v = [x.decode() if isinstance(x, bytes) else str(x) for x in np.atleast_1d(v).tolist()]
+                out[name] = v
         if "general/subject" in f:
             subj = {}
             g = f["general/subject"]

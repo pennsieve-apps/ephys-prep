@@ -122,7 +122,7 @@ Bad parameters exit 2; no recording found, or every session failed, exit 1; a fa
 |---|---|
 | `<session_id>/recording/` | SpikeInterface `binary_folder`: `traces_cached_seg0.raw` (int16, samples × channels), `times_cached_seg0.raw` (float64 session-clock time of every sample, when the source had timestamps; else `t_start` in `binary.json`), `probegroup.json`, `properties/` (`brain_area` when known, gains). Open with `spikeinterface.load(folder)`. |
 | `<session_id>/motion/` | SpikeInterface `Motion` (`Motion.load`): displacement (µm) per time bin (1 s, session clock) and depth window. |
-| `<session_id>/session.json` | `session_id, source, source_format, stream, probe {model, serial, part_number, geometry_source}, sampling_frequency, t_start, t_stop, duration_s, n_channels, n_channels_source, bad_channels [{id, reason}], motion_corrected, motion_estimated, motion_method, motion_source, motion_threshold_um, motion_above_threshold, motion_decision, motion {max_abs_displacement_um, median_drift_range_um, max_drift_range_um, estimate_params}, time_source, effective_sampling_frequency / nominal_sampling_frequency / clock_difference_percent` (explicit timestamps), `timestamp_problems` (when broken), `gain_to_uV, preprocessing` (every step with its parameters), the source NWB's `session_start_time, identifier, session_description, timestamps_reference_time, subject`, and `sheet` (the session's `sessions.csv` columns). |
+| `<session_id>/session.json` | `session_id, source, source_format, stream, probe {model, serial, part_number, geometry_source}, sampling_frequency, t_start, t_stop, duration_s, n_channels, n_channels_source, bad_channels [{id, reason}], motion_corrected, motion_estimated, motion_method, motion_source, motion_threshold_um, motion_above_threshold, motion_decision, motion {max_abs_displacement_um, median_drift_range_um, max_drift_range_um, estimate_params}, time_source, effective_sampling_frequency / nominal_sampling_frequency / clock_difference_percent` (explicit timestamps), `timestamp_problems` (when broken), `gain_to_uV, preprocessing` (every step with its parameters), the source NWB's `session_start_time, identifier, session_description, timestamps_reference_time, institution, lab, experimenter, experiment_description, keywords, protocol, nwb_session_id` (the source's own `session_id`) and the full `subject` (every field of `general/subject`: subject_id, sex, species, strain, genotype, date_of_birth / age, weight, description), and `sheet` (the session's `sessions.csv` columns). |
 | `<session_id>/<session_id>_raw_traces.png` | 0.2 s of every channel by depth, raw vs preprocessed. |
 | `<session_id>/<session_id>_bad_channels.png` | Noise per channel along the probe, coloured by bad-channel label. |
 | `<session_id>/<session_id>_drift_raster.png` | Detected spikes by time and depth, before and after the motion estimate. |
@@ -143,8 +143,8 @@ more than one probe, `_probe00`, `_probe01`, ... is appended (from the stream na
 clock; DANDI:000409). Phase shift applied (NP 1.0 part
 number `PRB_1_4_0480_1_C` from the NWB device), 1 bad channel (`AP191`, dead), 383 channels written (13 GB int16).
 Timestamps: effective rate 30,000.48 Hz vs 30,000 Hz nominal (+0.0016 %, below the 0.1 % reporting threshold; no
-broken stretches in this cut). DREDge found 255,873 spikes (426 per s) and very little drift: median range 2.6 µm,
-largest 8.9 µm, below the 10 µm threshold, so the CPU sorters will not interpolate and Kilosort4 corrects on its
+broken stretches in this cut); the written recording's `sampling_frequency` is that effective rate. DREDge found
+269,272 spikes (449 per s) and very little drift: median range 2.4 µm, largest 8.4 µm, below the 10 µm threshold, so the CPU sorters will not interpolate and Kilosort4 corrects on its
 own. Brain areas from IBL's histology (17, from V1 through hippocampus to thalamus and midbrain) are kept on the
 channels. Output: the workflow repo's `data/work/ibl/ephys-prep/`.
 
@@ -168,10 +168,11 @@ flagged) all process to `status ok`. Raw NWB was tested on the IBL file and the 
 
 ## Runtime
 
-Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 min probe took **18 min**
-(bad channels 0.5 min, DREDge 12 min, writing 5.5 min); peak memory 4.6 GB in the main process plus ~0.5-1.2 GB per
+Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 min probe took **9-18 min**
+depending on the load from other jobs on the machine (DREDge about two thirds, writing most of the rest); peak memory 4.6 GB in the main process plus ~0.5-1.2 GB per
 worker; 120 s took 2 min. The ground-truth file (120 channels, 60 s) took 1.6 min. **Docker, linux/amd64 under
-emulation** (QEMU, 5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
+emulation**, Lambda-style (read-only, uid 65534, default 64 MB `/dev/shm`, 2 CPUs, 4 GB): 30 s of the IBL probe
+completed (main process 1.6 GB; cgroup peak 3.6 GB including page cache). Under QEMU (5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
 container (2 CPUs, 4 GB) took 5-10 min with 1.9 GB peak; 60 s of the IBL probe (2 CPUs, 4 GB, 2 workers) took 12 min (main process 1.5 GB; the cgroup peak reached its 4 GB limit with page cache of the 6.6 GB NWB file).
 
 Memory scales with the number of workers: each spawned worker holds the stack (~350 MB) and a few 1 s chunks of

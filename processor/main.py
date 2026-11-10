@@ -427,6 +427,7 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
         "session_description": nwb.get("session_description"),
         "timestamps_reference_time": nwb.get("timestamps_reference_time"),
         "subject": nwb.get("subject"),
+        **{k: nwb.get(k) for k in ("institution", "lab", "experimenter", "experiment_description", "keywords", "nwb_session_id", "protocol")},
         **({"sheet": sheet} if sheet else {}),
         "app": APP,
         "version": app_version(),

@@ -119,7 +119,9 @@ def write_nwb(path: Path, series: list[dict], locs: np.ndarray, identifier: str 
 
     nwb = NWBFile(session_description="synthetic recording", identifier=identifier,
                   session_start_time=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
-                  subject=Subject(subject_id="fix01", species="Mus musculus", sex="F", age="P90D"))
+                  subject=Subject(subject_id="fix01", species="Mus musculus", sex="F", age="P90D"),
+                  institution="Fixture University", lab="fixture lab", experimenter=["Doe, Jane"], session_id="fix-session-1",
+                  experiment_description="synthetic", keywords=["synthetic", "ecephys"])
     nwb.add_electrode_column("rel_x", "x on the probe (um)")
     nwb.add_electrode_column("rel_y", "y on the probe (um)")
     regions = ["CA1", "DG", "VISp", "PO"]

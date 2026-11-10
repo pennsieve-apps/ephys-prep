@@ -124,6 +124,8 @@ def test_session_clock_kept(default_run):
     s = json.loads((default_run / "sub-fixnwb_ses-01" / "session.json").read_text())
     assert s["time_source"] == "NWB timestamps" and abs(s["clock_difference_percent"] - 0.2) < 0.01
     assert s["session_start_time"].startswith("2026-01-02") and s["identifier"] == "fixture-nwb" and s["subject"]["subject_id"] == "fix01"
+    assert s["institution"] == "Fixture University" and s["lab"] == "fixture lab" and s["nwb_session_id"] == "fix-session-1"
+    assert s["experimenter"] == ["Doe, Jane"] and s["subject"]["sex"] == "F" and s["subject"]["age"] == "P90D"
     assert set(nwb.get_property("brain_area")) <= {"CA1", "DG", "VISp", "PO"}
 
 
