@@ -151,7 +151,6 @@ parameters:
 inputs:
   - name: recording
     description: >-
-      Written to OUTPUT_DIR/recording/ephys-prep/.
       Raw recordings, found by name and content anywhere below: SpikeGLX (*.ap.bin + .meta, or
       IBL *.ap.cbin), Open Ephys (binary or legacy; the folder with "Record Node" folders),
       Intan (*.rhd / *.rhs), NWB files with an ElectricalSeries in acquisition/ (spike band,
@@ -172,6 +171,7 @@ inputs:
 outputs:
   - name: recording
     description: >-
+      Written to OUTPUT_DIR/recording/ephys-prep/.
       ephys-prep/<session_id>/recording/ (SpikeInterface binary_folder: int16 traces, probe,
       channel locations, brain_area when known, session-clock times), ephys-prep/<session_id>/motion/
       (SpikeInterface Motion, DREDge), ephys-prep/<session_id>/session.json (source, probe, window,

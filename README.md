@@ -151,7 +151,7 @@ channels. Output: the workflow repo's `data/work/ibl/ephys-prep/`.
 
 **Ground truth** (DANDI:001250 `sub-demo-npx-bio-evoked`: simulated NP 1.0 shank, 120 channels, 20 kHz,
 float32 µV, 60 s; `BAD_CHANNELS=dead-noisy`): the simulation's float32 µV were written as int16 at 0.17 µV/bit (1/20 of
-the median noise); no bad channels; drift 0.2 µm (none was simulated). With `BAD_CHANNELS=auto` the "outside the
+the median noise); no bad channels; drift 0.1 µm (none was simulated). With `BAD_CHANNELS=auto` the "outside the
 brain" rule flags 38 quiet channels at the top of this simulated shank (see Limitations). Output:
 `data/work/ground-truth/ephys-prep/`.
 
