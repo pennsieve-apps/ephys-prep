@@ -1,0 +1,777 @@
+cff-version: 1.2.0
+message: If you use this app, please cite it and the works it builds on, listed under references.
+type: software
+title: ephys-prep
+abstract: 'Prepares raw extracellular recordings (Neuropixels and other probes) for spike sorting with SpikeInterface, following
+  the AIND and IBL pipelines: time window on the session clock, phase-shift correction, high-pass filter, bad-channel detection,
+  common median reference or IBL destriping, and DREDge drift estimation, with QC figures. Part of the Pennsieve systems neuroscience
+  workflows.'
+authors:
+- name: Pennsieve (University of Pennsylvania)
+contact:
+- given-names: Joost
+  family-names: Wagenaar
+  orcid: https://orcid.org/0009-0004-5925-5451
+  affiliation: University of Pennsylvania
+repository-code: https://github.com/pennsieve-apps/ephys-prep
+license: Apache-2.0
+keywords:
+- neuroscience
+- electrophysiology
+- neuropixels
+- nwb
+- spike-sorting
+- preprocessing
+- quality-control
+- drift-correction
+- spikeinterface
+references:
+- type: article
+  title: SpikeInterface, a unified framework for spike sorting
+  authors:
+  - family-names: Buccino
+    given-names: Alessio P
+    orcid: https://orcid.org/0000-0003-3661-527X
+  - family-names: Hurwitz
+    given-names: Cole L
+    orcid: https://orcid.org/0000-0002-2023-1653
+  - family-names: Garcia
+    given-names: Samuel
+    orcid: https://orcid.org/0000-0001-6389-9779
+  - family-names: Magland
+    given-names: Jeremy
+    orcid: https://orcid.org/0000-0002-5286-4375
+  - family-names: Siegle
+    given-names: Joshua H
+    orcid: https://orcid.org/0000-0002-7736-4844
+  - family-names: Hurwitz
+    given-names: Roger
+  - family-names: Hennig
+    given-names: Matthias H
+    orcid: https://orcid.org/0000-0001-7270-5817
+  year: 2020
+  journal: eLife
+  volume: '9'
+  start: e61834
+  doi: 10.7554/elife.61834
+  identifiers:
+  - type: other
+    value: '33170122'
+    description: PubMed ID
+- type: article
+  title: Efficient and reproducible pipelines for spike sorting large-scale electrophysiology data
+  authors:
+  - family-names: Buccino
+    given-names: Alessio Paolo
+    orcid: https://orcid.org/0000-0003-3661-527X
+  - family-names: Sridhar
+    given-names: Arjun
+    orcid: https://orcid.org/0009-0000-9152-9863
+  - family-names: Feng
+    given-names: David
+    orcid: https://orcid.org/0000-0002-4920-8123
+  - family-names: Svoboda
+    given-names: Karel
+    orcid: https://orcid.org/0000-0002-6670-7362
+  - family-names: Siegle
+    given-names: Joshua H
+    orcid: https://orcid.org/0000-0002-7736-4844
+  year: 2026
+  journal: eLife
+  volume: '15'
+  start: RP110170
+  doi: 10.7554/elife.110170
+  identifiers:
+  - type: other
+    value: '42554034'
+    description: PubMed ID
+- type: generic
+  title: Spike sorting pipeline for the International Brain Laboratory
+  authors:
+  - family-names: Laboratory
+    given-names: International Brain
+  year: 2024
+  publisher:
+    name: figshare
+  doi: 10.6084/m9.figshare.19705522
+- type: article
+  title: Common median referencing for improved action potential detection with multielectrode arrays
+  authors:
+  - family-names: Rolston
+    given-names: J.D.
+  - family-names: Gross
+    given-names: R.E.
+  - family-names: Potter
+    given-names: S.M.
+  year: 2009
+  journal: 2009 Annual International Conference of the IEEE Engineering in Medicine and Biology Society
+  start: '1604'
+  end: '1607'
+  doi: 10.1109/iembs.2009.5333230
+  identifiers:
+  - type: other
+    value: '19964004'
+    description: PubMed ID
+- type: article
+  title: A Modular Implementation to Handle and Benchmark Drift Correction for High-Density Extracellular Recordings
+  authors:
+  - family-names: Garcia
+    given-names: Samuel
+    orcid: https://orcid.org/0000-0001-6389-9779
+  - family-names: Windolf
+    given-names: Charlie
+  - family-names: Boussard
+    given-names: Julien
+  - family-names: Dichter
+    given-names: Benjamin
+  - family-names: Buccino
+    given-names: Alessio P.
+  - family-names: Yger
+    given-names: Pierre
+    orcid: https://orcid.org/0000-0003-1376-5240
+  year: 2024
+  journal: eneuro
+  volume: '11'
+  issue: '2'
+  start: ENEURO.0229-23.2023
+  doi: 10.1523/eneuro.0229-23.2023
+  identifiers:
+  - type: other
+    value: '38238082'
+    description: PubMed ID
+- type: article
+  title: 'DREDge: robust motion correction for high-density extracellular recordings across species'
+  authors:
+  - family-names: Windolf
+    given-names: Charlie
+    orcid: https://orcid.org/0000-0002-8360-7726
+  - family-names: Yu
+    given-names: Han
+  - family-names: Paulk
+    given-names: Angelique C.
+    orcid: https://orcid.org/0000-0002-4413-3417
+  - family-names: Meszéna
+    given-names: Domokos
+    orcid: https://orcid.org/0000-0003-4042-2542
+  - family-names: Muñoz
+    given-names: William
+    orcid: https://orcid.org/0000-0002-1354-3472
+  - family-names: Boussard
+    given-names: Julien
+    orcid: https://orcid.org/0009-0006-8432-6295
+  - family-names: Hardstone
+    given-names: Richard
+    orcid: https://orcid.org/0000-0002-7502-9145
+  - family-names: Caprara
+    given-names: Irene
+  - family-names: Jamali
+    given-names: Mohsen
+    orcid: https://orcid.org/0000-0002-1750-7591
+  - family-names: Kfir
+    given-names: Yoav
+    orcid: https://orcid.org/0000-0002-9373-8260
+  - family-names: Xu
+    given-names: Duo
+    orcid: https://orcid.org/0000-0002-8259-8688
+  - family-names: Chung
+    given-names: Jason E.
+  - family-names: Sellers
+    given-names: Kristin K.
+    orcid: https://orcid.org/0000-0002-0517-2296
+  - family-names: Ye
+    given-names: Zhiwen
+    orcid: https://orcid.org/0000-0003-4311-1037
+  - family-names: Shaker
+    given-names: Jordan
+  - family-names: Lebedeva
+    given-names: Anna
+    orcid: https://orcid.org/0000-0003-2454-411X
+  - family-names: Raghavan
+    given-names: RT
+  - family-names: Trautmann
+    given-names: Eric
+  - family-names: Melin
+    given-names: Max
+  - family-names: Couto
+    given-names: João
+    orcid: https://orcid.org/0000-0002-5580-6947
+  - family-names: Garcia
+    given-names: Samuel
+    orcid: https://orcid.org/0000-0001-6389-9779
+  - family-names: Coughlin
+    given-names: Brian
+    orcid: https://orcid.org/0000-0002-8009-5614
+  - family-names: Elmaleh
+    given-names: Margot
+  - family-names: Christianson
+    given-names: David
+  - family-names: Greenlee
+    given-names: Jeremy D. W.
+  - family-names: Horváth
+    given-names: Csaba
+  - family-names: Fiáth
+    given-names: Richárd
+  - family-names: Ulbert
+    given-names: István
+    orcid: https://orcid.org/0000-0001-9941-9159
+  - family-names: Long
+    given-names: Michael A.
+  - family-names: Movshon
+    given-names: J. Anthony
+  - family-names: Shadlen
+    given-names: Michael N.
+    orcid: https://orcid.org/0000-0002-2002-2210
+  - family-names: Churchland
+    given-names: Mark M.
+  - family-names: Churchland
+    given-names: Anne K.
+  - family-names: Steinmetz
+    given-names: Nicholas A.
+    orcid: https://orcid.org/0000-0001-7029-2908
+  - family-names: Chang
+    given-names: Edward F.
+    orcid: https://orcid.org/0000-0003-2480-4700
+  - family-names: Schweitzer
+    given-names: Jeffrey S.
+  - family-names: Williams
+    given-names: Ziv M.
+  - family-names: Cash
+    given-names: Sydney S.
+    orcid: https://orcid.org/0000-0002-4557-6391
+  - family-names: Paninski
+    given-names: Liam
+  - family-names: Varol
+    given-names: Erdem
+  year: 2025
+  journal: Nature Methods
+  volume: '22'
+  issue: '4'
+  start: '788'
+  end: '800'
+  doi: 10.1038/s41592-025-02614-5
+  identifiers:
+  - type: other
+    value: '40050699'
+    description: PubMed ID
+- type: article
+  title: 'Neo: an object model for handling electrophysiology data in multiple formats'
+  authors:
+  - family-names: Garcia
+    given-names: Samuel
+  - family-names: Guarino
+    given-names: Domenico
+  - family-names: Jaillet
+    given-names: Florent
+  - family-names: Jennings
+    given-names: Todd
+  - family-names: Pröpper
+    given-names: Robert
+  - family-names: Rautenberg
+    given-names: Philipp L.
+  - family-names: Rodgers
+    given-names: Chris C.
+  - family-names: Sobolev
+    given-names: Andrey
+  - family-names: Wachtler
+    given-names: Thomas
+  - family-names: Yger
+    given-names: Pierre
+  - family-names: Davison
+    given-names: Andrew P.
+  year: 2014
+  journal: Frontiers in Neuroinformatics
+  volume: '8'
+  doi: 10.3389/fninf.2014.00010
+  identifiers:
+  - type: other
+    value: '24600386'
+    description: PubMed ID
+- type: article
+  title: The Neurodata Without Borders ecosystem for neurophysiological data science
+  authors:
+  - family-names: Rübel
+    given-names: Oliver
+    orcid: https://orcid.org/0000-0001-9902-1984
+  - family-names: Tritt
+    given-names: Andrew
+  - family-names: Ly
+    given-names: Ryan
+    orcid: https://orcid.org/0000-0001-9238-0642
+  - family-names: Dichter
+    given-names: Benjamin K
+  - family-names: Ghosh
+    given-names: Satrajit
+    orcid: https://orcid.org/0000-0002-5312-6729
+  - family-names: Niu
+    given-names: Lawrence
+  - family-names: Baker
+    given-names: Pamela
+  - family-names: Soltesz
+    given-names: Ivan
+  - family-names: Ng
+    given-names: Lydia
+  - family-names: Svoboda
+    given-names: Karel
+  - family-names: Frank
+    given-names: Loren
+  - family-names: Bouchard
+    given-names: Kristofer E
+    orcid: https://orcid.org/0000-0002-1974-4603
+  year: 2022
+  journal: eLife
+  volume: '11'
+  start: e78362
+  doi: 10.7554/elife.78362
+  identifiers:
+  - type: other
+    value: '36193886'
+    description: PubMed ID
+- type: article
+  title: Fully integrated silicon probes for high-density recording of neural activity
+  authors:
+  - family-names: Jun
+    given-names: James J.
+  - family-names: Steinmetz
+    given-names: Nicholas A.
+  - family-names: Siegle
+    given-names: Joshua H.
+  - family-names: Denman
+    given-names: Daniel J.
+  - family-names: Bauza
+    given-names: Marius
+  - family-names: Barbarits
+    given-names: Brian
+  - family-names: Lee
+    given-names: Albert K.
+  - family-names: Anastassiou
+    given-names: Costas A.
+  - family-names: Andrei
+    given-names: Alexandru
+  - family-names: Aydın
+    given-names: Çağatay
+  - family-names: Barbic
+    given-names: Mladen
+  - family-names: Blanche
+    given-names: Timothy J.
+  - family-names: Bonin
+    given-names: Vincent
+  - family-names: Couto
+    given-names: João
+  - family-names: Dutta
+    given-names: Barundeb
+  - family-names: Gratiy
+    given-names: Sergey L.
+  - family-names: Gutnisky
+    given-names: Diego A.
+  - family-names: Häusser
+    given-names: Michael
+  - family-names: Karsh
+    given-names: Bill
+  - family-names: Ledochowitsch
+    given-names: Peter
+  - family-names: Lopez
+    given-names: Carolina Mora
+  - family-names: Mitelut
+    given-names: Catalin
+  - family-names: Musa
+    given-names: Silke
+  - family-names: Okun
+    given-names: Michael
+  - family-names: Pachitariu
+    given-names: Marius
+  - family-names: Putzeys
+    given-names: Jan
+  - family-names: Rich
+    given-names: P. Dylan
+  - family-names: Rossant
+    given-names: Cyrille
+  - family-names: Sun
+    given-names: Wei-lung
+  - family-names: Svoboda
+    given-names: Karel
+  - family-names: Carandini
+    given-names: Matteo
+  - family-names: Harris
+    given-names: Kenneth D.
+  - family-names: Koch
+    given-names: Christof
+  - family-names: O’Keefe
+    given-names: John
+  - family-names: Harris
+    given-names: Timothy D.
+  year: 2017
+  journal: Nature
+  volume: '551'
+  issue: '7679'
+  start: '232'
+  end: '236'
+  doi: 10.1038/nature24636
+  identifiers:
+  - type: other
+    value: '29120427'
+    description: PubMed ID
+- type: article
+  title: 'Neuropixels 2.0: A miniaturized high-density probe for stable, long-term brain recordings'
+  authors:
+  - family-names: Steinmetz
+    given-names: Nicholas A.
+    orcid: https://orcid.org/0000-0001-7029-2908
+  - family-names: Aydin
+    given-names: Cagatay
+    orcid: https://orcid.org/0000-0002-7216-1079
+  - family-names: Lebedeva
+    given-names: Anna
+    orcid: https://orcid.org/0000-0003-2454-411X
+  - family-names: Okun
+    given-names: Michael
+    orcid: https://orcid.org/0000-0002-7795-5513
+  - family-names: Pachitariu
+    given-names: Marius
+    orcid: https://orcid.org/0000-0001-7106-814X
+  - family-names: Bauza
+    given-names: Marius
+    orcid: https://orcid.org/0000-0003-3514-8382
+  - family-names: Beau
+    given-names: Maxime
+    orcid: https://orcid.org/0000-0002-8907-6612
+  - family-names: Bhagat
+    given-names: Jai
+    orcid: https://orcid.org/0000-0003-2571-3712
+  - family-names: Böhm
+    given-names: Claudia
+    orcid: https://orcid.org/0000-0002-9802-1162
+  - family-names: Broux
+    given-names: Martijn
+    orcid: https://orcid.org/0000-0001-6543-3403
+  - family-names: Chen
+    given-names: Susu
+    orcid: https://orcid.org/0000-0002-5065-1157
+  - family-names: Colonell
+    given-names: Jennifer
+  - family-names: Gardner
+    given-names: Richard J.
+    orcid: https://orcid.org/0000-0002-3242-8840
+  - family-names: Karsh
+    given-names: Bill
+  - family-names: Kloosterman
+    given-names: Fabian
+    orcid: https://orcid.org/0000-0001-6680-9660
+  - family-names: Kostadinov
+    given-names: Dimitar
+    orcid: https://orcid.org/0000-0001-7548-2209
+  - family-names: Mora-Lopez
+    given-names: Carolina
+  - family-names: O’Callaghan
+    given-names: John
+  - family-names: Park
+    given-names: Junchol
+    orcid: https://orcid.org/0000-0002-4739-0793
+  - family-names: Putzeys
+    given-names: Jan
+    orcid: https://orcid.org/0000-0001-8834-5852
+  - family-names: Sauerbrei
+    given-names: Britton
+  - family-names: van Daal
+    given-names: Rik J. J.
+    orcid: https://orcid.org/0000-0001-5230-6165
+  - family-names: Vollan
+    given-names: Abraham Z.
+    orcid: https://orcid.org/0000-0003-3376-6689
+  - family-names: Wang
+    given-names: Shiwei
+    orcid: https://orcid.org/0000-0002-5450-2108
+  - family-names: Welkenhuysen
+    given-names: Marleen
+  - family-names: Ye
+    given-names: Zhiwen
+    orcid: https://orcid.org/0000-0003-4311-1037
+  - family-names: Dudman
+    given-names: Joshua T.
+    orcid: https://orcid.org/0000-0002-4436-1057
+  - family-names: Dutta
+    given-names: Barundeb
+  - family-names: Hantman
+    given-names: Adam W.
+    orcid: https://orcid.org/0000-0002-6563-1423
+  - family-names: Harris
+    given-names: Kenneth D.
+  - family-names: Lee
+    given-names: Albert K.
+    orcid: https://orcid.org/0000-0003-4332-8332
+  - family-names: Moser
+    given-names: Edvard I.
+    orcid: https://orcid.org/0000-0003-0226-5566
+  - family-names: O’Keefe
+    given-names: John
+    orcid: https://orcid.org/0000-0001-5697-4881
+  - family-names: Renart
+    given-names: Alfonso
+    orcid: https://orcid.org/0000-0001-7916-9930
+  - family-names: Svoboda
+    given-names: Karel
+    orcid: https://orcid.org/0000-0002-6670-7362
+  - family-names: Häusser
+    given-names: Michael
+    orcid: https://orcid.org/0000-0002-2673-8957
+  - family-names: Haesler
+    given-names: Sebastian
+    orcid: https://orcid.org/0000-0003-4924-7381
+  - family-names: Carandini
+    given-names: Matteo
+    orcid: https://orcid.org/0000-0003-4880-7682
+  - family-names: Harris
+    given-names: Timothy D.
+    orcid: https://orcid.org/0000-0002-6289-4439
+  year: 2021
+  journal: Science
+  volume: '372'
+  issue: '6539'
+  start: eabf4588
+  doi: 10.1126/science.abf4588
+  identifiers:
+  - type: other
+    value: '33859006'
+    description: PubMed ID
+- type: data
+  title: IBL - Brain Wide Map
+  authors:
+  - name: International Brain Laboratory
+  year: 2026
+  publisher:
+    name: DANDI Archive
+  doi: 10.48324/dandi.000409/0.260309.1324
+- type: article
+  title: A brain-wide map of neural activity during complex behaviour
+  authors:
+  - family-names: Angelaki
+    given-names: Dora
+  - family-names: Benson
+    given-names: Brandon
+  - family-names: Benson
+    given-names: Julius
+  - family-names: Birman
+    given-names: Daniel
+  - family-names: Bonacchi
+    given-names: Niccolò
+  - family-names: Bougrova
+    given-names: Kcénia
+  - family-names: Bruijns
+    given-names: Sebastian A
+  - family-names: Carandini
+    given-names: Matteo
+  - family-names: Catarino
+    given-names: Joana A
+  - family-names: Chapuis
+    given-names: Gaelle A
+  - family-names: Churchland
+    given-names: Anne K
+  - family-names: Dan
+    given-names: Yang
+  - family-names: Davatolhagh
+    given-names: Felicia
+  - family-names: Dayan
+    given-names: Peter
+  - family-names: DeWitt
+    given-names: Eric Ej
+  - family-names: Engel
+    given-names: Tatiana A
+  - family-names: Fabbri
+    given-names: Michele
+  - family-names: Faulkner
+    given-names: Mayo
+  - family-names: Fiete
+    given-names: Ila Rani
+  - family-names: Findling
+    given-names: Charles
+  - family-names: Freitas-Silva
+    given-names: Laura
+  - family-names: Gerçek
+    given-names: Berk
+  - family-names: Harris
+    given-names: Kenneth D
+  - family-names: Häusser
+    given-names: Michael
+  - family-names: Hofer
+    given-names: Sonja B
+  - family-names: Hu
+    given-names: Fei
+  - family-names: Hubert
+    given-names: Félix
+  - family-names: Huntenburg
+    given-names: Julia M
+  - family-names: Khanal
+    given-names: Anup
+  - family-names: Krasniak
+    given-names: Christopher S
+  - family-names: Langdon
+    given-names: Christopher
+  - family-names: Langfield
+    given-names: Christopher
+  - family-names: Lau
+    given-names: Petrina Y P
+  - family-names: Mainen
+    given-names: Zachary F
+  - family-names: Meijer
+    given-names: Guido T
+  - family-names: Miska
+    given-names: Nathaniel J
+  - family-names: Mrsic-Flogel
+    given-names: Thomas D
+  - family-names: Noel
+    given-names: Jean-Paul
+  - family-names: Nylund
+    given-names: Kai
+  - family-names: Pan-Vazquez
+    given-names: Alejandro
+  - family-names: Paninski
+    given-names: Liam
+  - family-names: Pouget
+    given-names: Alexandre
+  - family-names: Rossant
+    given-names: Cyrille
+  - family-names: Roth
+    given-names: Noam
+  - family-names: Schaeffer
+    given-names: Rylan
+  - family-names: Schartner
+    given-names: Michael
+  - family-names: Shi
+    given-names: Yanliang
+  - family-names: Socha
+    given-names: Karolina Z
+  - family-names: Steinmetz
+    given-names: Nicholas A
+  - family-names: Svoboda
+    given-names: Karel
+  - family-names: Urai
+    given-names: Anne E
+  - family-names: Wells
+    given-names: Miles J
+  - family-names: West
+    given-names: Steven J
+  - family-names: Whiteway
+    given-names: Matthew R
+  - family-names: Winter
+    given-names: Olivier
+  - family-names: Witten
+    given-names: Ilana B
+  year: 2025
+  journal: Nature
+  volume: '645'
+  issue: '8079'
+  start: '177'
+  end: '191'
+  doi: 10.1038/s41586-025-09235-0
+  identifiers:
+  - type: other
+    value: '40903598'
+    description: PubMed ID
+  notes: Authored by the International Brain Laboratory consortium. Author list as in PubMed (PMID 40903598, the consortium
+    and 56 members, alphabetical). Crossref's record has 179 person entries (131 distinct, with repeats, and further names
+    not in PubMed's list), which CITATION.cff cannot hold as is (authors must be unique).
+- type: data
+  title: Spike sorting biases and information loss in a detailed cortical model
+  authors:
+  - family-names: Laquitaine
+    given-names: Steeve
+  - family-names: Imbeni
+    given-names: Milo
+  - family-names: Tharayil
+    given-names: Joseph
+  - family-names: Isbister
+    given-names: James
+  - family-names: Reimann
+    given-names: Michael
+  year: 2026
+  publisher:
+    name: DANDI Archive
+  doi: 10.48324/dandi.001250/0.261108.1908
+- type: article
+  title: Spike sorting biases and information loss in a detailed cortical model
+  authors:
+  - family-names: Laquitaine
+    given-names: Steeve
+    orcid: https://orcid.org/0000-0002-9647-3149
+  - family-names: Imbeni
+    given-names: Milo
+    orcid: https://orcid.org/0000-0002-4482-8390
+  - family-names: Tharayil
+    given-names: Joseph
+    orcid: https://orcid.org/0000-0002-2390-4104
+  - family-names: Isbister
+    given-names: James B.
+    orcid: https://orcid.org/0000-0002-1013-3013
+  - family-names: Reimann
+    given-names: Michael W.
+    orcid: https://orcid.org/0000-0003-3455-2367
+  year: 2024
+  journal: bioRxiv
+  doi: 10.1101/2024.12.04.626805
+- type: software
+  title: SpikeInterface
+  authors:
+  - family-names: Buccino
+    given-names: Alessio
+  - family-names: Garcia
+    given-names: Samuel
+  repository-code: https://github.com/SpikeInterface/spikeinterface
+  license: MIT
+  version: 0.105.4
+  notes: Authors as listed in the package metadata (PyPI); cite the eLife paper (Buccino et al. 2020).
+- type: software
+  title: probeinterface
+  authors:
+  - family-names: Garcia
+    given-names: Samuel
+  - family-names: Buccino
+    given-names: Alessio
+  - family-names: Halcrow
+    given-names: Chris
+  repository-code: https://github.com/SpikeInterface/probeinterface
+  license: MIT
+  version: 0.4.2
+  notes: Authors as listed in the package metadata (PyPI).
+- type: software
+  title: PyNWB
+  authors:
+  - family-names: Tritt
+    given-names: Andrew
+  - family-names: Ly
+    given-names: Ryan
+  - family-names: Ruebel
+    given-names: Oliver
+  - family-names: Dichter
+    given-names: Ben
+  - family-names: Avaylon
+    given-names: Matthew
+  - family-names: Prince
+    given-names: Stephanie
+  repository-code: https://github.com/NeurodataWithoutBorders/pynwb
+  license: BSD-3-Clause
+  version: 4.2.0
+  notes: Authors as listed in the package metadata (PyPI); cite Rübel et al. 2022.
+- type: software
+  title: mtscomp
+  authors:
+  - family-names: Rossant
+    given-names: Cyrille
+  repository-code: https://github.com/int-brain-lab/mtscomp
+  license: BSD-3-Clause
+  version: 1.0.2
+  notes: International Brain Laboratory; author as listed in the package metadata (PyPI).
+- type: software
+  title: PyTorch
+  authors:
+  - name: PyTorch Team
+  repository-code: https://github.com/pytorch/pytorch
+  license: BSD-3-Clause
+  version: 2.14.1
+  notes: Author as listed in the package metadata (PyPI).
+- type: software
+  title: AIND ephys pipeline
+  authors:
+  - name: Allen Institute for Neural Dynamics
+  repository-code: https://github.com/AllenNeuralDynamics/aind-ephys-pipeline
+  license: MIT
+  version: 1.5.0
+  notes: Default parameters (pipeline/default_params.json) used by this app; cite Buccino et al. 2026.
