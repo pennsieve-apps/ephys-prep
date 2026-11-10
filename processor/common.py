@@ -222,6 +222,10 @@ def job_kwargs_for(threads: int) -> dict:
                 "mp_context": "spawn"}
     threads = worker_count(threads)       # each thread holds about as much as a worker process would
     log.info("no /dev/shm (POSIX semaphores unavailable): SpikeInterface runs on %d threads instead of worker processes", threads)
+    import warnings
+
+    # numba warns that it can't take a multiprocessing lock for its parallel backend; with one process it doesn't need one
+    warnings.filterwarnings("ignore", message="Could not obtain multiprocessing lock")
     return {"n_jobs": threads, "chunk_duration": "1s", "progress_bar": False, "pool_engine": "thread"}
 
 

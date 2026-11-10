@@ -12,12 +12,24 @@ calls it at module level, which spawned workers re-import.
 """
 from __future__ import annotations
 
+import atexit
 import mmap
 import os
 import secrets
 import tempfile
 
 _DIR = None
+_CREATED: set[str] = set()     # files this process created: removed at exit if still there (a crashed or interrupted step)
+
+
+@atexit.register
+def _sweep() -> None:
+    for path in list(_CREATED):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        _CREATED.discard(path)
 
 
 def _dir() -> str:
@@ -37,6 +49,7 @@ class FileSharedMemory:
             path = os.path.join(_dir(), name)
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
             os.ftruncate(fd, size)
+            _CREATED.add(path)
         else:
             if name is None:
                 raise ValueError("'name' can only be None if create=True")
@@ -75,6 +88,7 @@ class FileSharedMemory:
             os.unlink(self._path)
         except FileNotFoundError:
             pass
+        _CREATED.discard(self._path)
 
     def __reduce__(self):
         return (self.__class__, (self.name, False, self.size))

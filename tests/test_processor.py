@@ -248,3 +248,24 @@ def test_sheet_columns_do_not_overwrite_measurements(monkeypatch, fixture_dir, t
     assert run(monkeypatch, tmp_path / "in", tmp_path / "out", MOTION_CORRECTION="none") == 0
     h = json.loads((tmp_path / "out" / "recording" / "ephys-prep" / "summary.json").read_text())["sessions"]["S1"]
     assert h["t_start"] == pytest.approx(100.0) and h["subject_id"] == "fix01" and h["probe"] != "Probe01"
+
+
+def test_pause_kept_and_recorded_time(monkeypatch, tmp_path):
+    """A 12 s acquisition pause in explicit timestamps: kept (no data dropped); duration_s is the span on the
+    session clock, recorded_s the time actually recorded, which rates use."""
+    traces, locs, _ = make_fixture.synth(10.0)
+    n = traces.shape[0]
+    ts = 500.0 + np.arange(n) / make_fixture.FS
+    ts[n // 2:] += 12.0
+    make_fixture.write_nwb(tmp_path / "in" / "sub-pause_ses-01_ecephys.nwb", [{"name": "ElectricalSeriesAP", "data": traces, "timestamps": ts}],
+                           locs, identifier="fixture-pause")
+    assert run(monkeypatch, tmp_path / "in", tmp_path / "out", MOTION_CORRECTION="none") == 0
+    top = tmp_path / "out" / "recording" / "ephys-prep"
+    s = json.loads((top / "sub-pause_ses-01" / "session.json").read_text())
+    assert len(s["timestamp_problems"]["pauses"]) == 1 and "bad_stretches" not in s["timestamp_problems"]
+    assert s["duration_s"] == pytest.approx(22.0, abs=1e-3) and s["recorded_s"] == pytest.approx(10.0, abs=1e-3)
+    assert s["sampling_frequency"] == pytest.approx(make_fixture.FS, rel=1e-9)
+    rec = load(top / "sub-pause_ses-01" / "recording")
+    assert rec.get_num_samples() == n and rec.get_times()[n // 2] - rec.get_times()[n // 2 - 1] == pytest.approx(12.0 + 1 / make_fixture.FS)
+    h = json.loads((top / "summary.json").read_text())["sessions"]["sub-pause_ses-01"]
+    assert h["recorded_s"] == pytest.approx(10.0, abs=1e-3)

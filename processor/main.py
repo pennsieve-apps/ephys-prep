@@ -405,6 +405,8 @@ def _process_one(sid, rec, src, st, probe_info, item, p, out_root, input_dir, jo
         "t_start": prep.t_start,
         "t_stop": prep.t_stop,
         "duration_s": prep.t_stop - prep.t_start,
+        # time actually recorded (pauses excluded): samples / effective rate; use it for rates
+        "recorded_s": out.get_num_samples() / float(out.get_sampling_frequency()),
         "n_channels": out.get_num_channels(),
         "n_channels_source": n_src,
         "bad_channels": prep.bad_channels,
@@ -574,7 +576,8 @@ def _headline(r: dict) -> dict:
            "motion_estimated": s["motion_estimated"], "motion_corrected": s["motion_corrected"],
            "motion_above_threshold": s.get("motion_above_threshold"), "motion_decision": s.get("motion_decision"),
            "median_drift_range_um": m.get("median_drift_range_um"), "max_drift_range_um": m.get("max_drift_range_um"),
-           "n_peaks": r.get("n_peaks"), "peaks_per_s": (r["n_peaks"] / s["duration_s"]) if r.get("n_peaks") else None,
+           "n_peaks": r.get("n_peaks"), "peaks_per_s": (r["n_peaks"] / s["recorded_s"]) if r.get("n_peaks") else None,
+           "recorded_s": round(s["recorded_s"], 3),
            "time_source": s["time_source"]}
     if "timestamp_problems" in s:
         out["timestamp_problems"] = s["timestamp_problems"]
