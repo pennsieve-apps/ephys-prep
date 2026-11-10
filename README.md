@@ -173,7 +173,10 @@ Measured on an M-series Mac. **Native arm64** (6 worker processes): the IBL 10 m
 depending on the load from other jobs on the machine (DREDge about two thirds, writing most of the rest); peak memory 4.6 GB in the main process plus ~0.5-1.2 GB per
 worker; 120 s took 2 min. The ground-truth file (120 channels, 60 s) took 1.6 min. **Docker, linux/amd64 under
 emulation**, Lambda-style (read-only, uid 65534, default 64 MB `/dev/shm`, 2 CPUs, 4 GB): 30 s of the IBL probe
-completed (main process 1.6 GB; cgroup peak 3.6 GB including page cache). Under QEMU (5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
+completed (main process 1.6 GB; cgroup peak 3.6 GB including page cache), and also with no `/dev/shm` at all
+(`--ipc none`, as on Lambda: SpikeInterface then runs on threads instead of worker processes, which need POSIX
+semaphores; 3 min, 3.1 GB peak). SpikeInterface's shared memory is file-backed in `$TMPDIR/shm`
+(`processor/fileshm.py`), so the 64 MB `/dev/shm` of containers is never a limit. Under QEMU (5-10 × slower than native): the fixture (64 channels, 10 s) in the Lambda-style read-only
 container (2 CPUs, 4 GB) took 5-10 min with 1.9 GB peak; 60 s of the IBL probe (2 CPUs, 4 GB, 2 workers) took 12 min (main process 1.5 GB; the cgroup peak reached its 4 GB limit with page cache of the 6.6 GB NWB file).
 
 Memory scales with the number of workers: each spawned worker holds the stack (~350 MB) and a few 1 s chunks of

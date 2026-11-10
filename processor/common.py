@@ -220,6 +220,7 @@ def job_kwargs_for(threads: int) -> dict:
     if process_pool_available():
         return {"n_jobs": worker_count(threads), "chunk_duration": "1s", "progress_bar": False, "pool_engine": "process",
                 "mp_context": "spawn"}
+    threads = worker_count(threads)       # each thread holds about as much as a worker process would
     log.info("no /dev/shm (POSIX semaphores unavailable): SpikeInterface runs on %d threads instead of worker processes", threads)
     return {"n_jobs": threads, "chunk_duration": "1s", "progress_bar": False, "pool_engine": "thread"}
 
