@@ -1,5 +1,6 @@
 cff-version: 1.2.0
-message: If you use this app, please cite it and the works it builds on, listed under references.
+message: >-
+  If you use this app, please cite the work it implements (preferred-citation), this release, and Pennsieve (RRID:SCR_021677); the other works it builds on are listed under references.
 type: software
 title: ephys-prep
 abstract: 'Prepares raw extracellular recordings (Neuropixels and other probes) for spike sorting with SpikeInterface, following
@@ -25,6 +26,40 @@ keywords:
 - quality-control
 - drift-correction
 - spikeinterface
+# The work this app implements; the release report's "How to cite" puts it first.
+preferred-citation:
+  type: article
+  title: SpikeInterface, a unified framework for spike sorting
+  authors:
+  - family-names: Buccino
+    given-names: Alessio P
+    orcid: https://orcid.org/0000-0003-3661-527X
+  - family-names: Hurwitz
+    given-names: Cole L
+    orcid: https://orcid.org/0000-0002-2023-1653
+  - family-names: Garcia
+    given-names: Samuel
+    orcid: https://orcid.org/0000-0001-6389-9779
+  - family-names: Magland
+    given-names: Jeremy
+    orcid: https://orcid.org/0000-0002-5286-4375
+  - family-names: Siegle
+    given-names: Joshua H
+    orcid: https://orcid.org/0000-0002-7736-4844
+  - family-names: Hurwitz
+    given-names: Roger
+  - family-names: Hennig
+    given-names: Matthias H
+    orcid: https://orcid.org/0000-0001-7270-5817
+  year: 2020
+  journal: eLife
+  volume: '9'
+  start: e61834
+  doi: 10.7554/elife.61834
+  identifiers:
+  - type: other
+    value: '33170122'
+    description: PubMed ID
 references:
 - type: article
   title: SpikeInterface, a unified framework for spike sorting
